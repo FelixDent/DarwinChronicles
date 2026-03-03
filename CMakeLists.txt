@@ -21,7 +21,8 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 # ── Options ───────────────────────────────────────────────────────────────────
 option(DARWIN_BUILD_TESTS    "Build unit tests"          ON)
 option(DARWIN_BUILD_BENCHES  "Build benchmarks"          OFF)
-option(DARWIN_BUILD_EXAMPLES "Build example programs"    ON)
+option(DARWIN_BUILD_EXAMPLES  "Build example programs"    ON)
+option(DARWIN_BUILD_SANDBOXES "Build sandbox programs"   ON)
 
 # ── Warning flags (INTERFACE target) ──────────────────────────────────────────
 add_library(darwin_warnings INTERFACE)
@@ -68,4 +69,9 @@ endif()
 # ── Examples ──────────────────────────────────────────────────────────────────
 if(DARWIN_BUILD_EXAMPLES)
     add_subdirectory(examples)
+endif()
+
+# ── Sandboxes ────────────────────────────────────────────────────────────────
+if(DARWIN_BUILD_SANDBOXES)
+    add_subdirectory(sandboxes)
 endif()

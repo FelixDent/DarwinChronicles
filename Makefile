@@ -1,4 +1,4 @@
-.PHONY: build build-release test bench clean format run run-example help
+.PHONY: build build-release test bench clean format run run-example run-sandbox help
 
 BUILD_DIR    := build
 RELEASE_DIR  := build-release
@@ -27,7 +27,7 @@ clean: ## Remove build directories
 	rm -rf $(BUILD_DIR) $(RELEASE_DIR)
 
 format: ## Format all source files with clang-format
-	find include src tests benches examples -name '*.h' -o -name '*.cpp' | \
+	find include src tests benches examples sandboxes -name '*.h' -o -name '*.cpp' | \
 		xargs clang-format -i
 
 run: build ## Build and run the main executable
@@ -35,3 +35,6 @@ run: build ## Build and run the main executable
 
 run-example: build ## Run an example (usage: make run-example EXAMPLE=earth_like)
 	$(BUILD_DIR)/examples/$(EXAMPLE)
+
+run-sandbox: build ## Run a sandbox (usage: make run-sandbox SANDBOX=worldgen)
+	$(BUILD_DIR)/sandboxes/$(SANDBOX)/sandbox_$(SANDBOX)

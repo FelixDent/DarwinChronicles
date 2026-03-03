@@ -15,11 +15,12 @@ make test                           # Build + run all Catch2 tests
 make bench                          # Build + run Google Benchmark suite
 make run                            # Build + run main executable
 make run-example EXAMPLE=earth_like # Run a specific example
-make format                         # clang-format all source files
+make run-sandbox SANDBOX=worldgen   # Run a sandbox executable
+make format                         # clang-format all source files (includes sandboxes/)
 make clean                          # Remove build directories
 ```
 
-CMake options: `DARWIN_BUILD_TESTS` (ON), `DARWIN_BUILD_BENCHES` (OFF), `DARWIN_BUILD_EXAMPLES` (ON).
+CMake options: `DARWIN_BUILD_TESTS` (ON), `DARWIN_BUILD_BENCHES` (OFF), `DARWIN_BUILD_EXAMPLES` (ON), `DARWIN_BUILD_SANDBOXES` (ON).
 
 Run a single test by name:
 ```bash
@@ -53,12 +54,22 @@ Each module is a static library (`darwin_<module>`) with a CMake alias (`darwin:
 - **Energy tradeoffs**: Brain complexity, body size, speed all have metabolic costs. Organisms that over-invest in one trait die from energy depletion.
 - **Genome structure**: 152 floats encoding architecture genes, morphology, physiology, and neural weights. Sprites are procedurally generated from genome data.
 
+### Sandboxes
+
+`sandboxes/<name>/` are standalone executables for prototyping subsystems in isolation. They do **not** link any `darwin::*` modules — only SDL2, FastNoiseLite, and `darwin_warnings`. Code proven in a sandbox can later be promoted into a `darwin::*` module.
+
+The `add_darwin_sandbox(name)` CMake helper (defined in `sandboxes/CMakeLists.txt`) wires up the standard sandbox dependencies. Each sandbox lives in its own subdirectory and produces a `sandbox_<name>` binary at `build/sandboxes/<name>/sandbox_<name>`.
+
+Current sandboxes:
+- `sandboxes/worldgen/` — Interactive procedural world generation (SDL2 rendering, overlays, camera, live parameter tweaking, screenshot/log export)
+
 ### File Layout Convention
 
 - Public headers: `include/darwin/<module>/<file>.h` (use `#include <darwin/world/grid.h>`)
 - Source files: `src/<module>/<file>.cpp`
 - Each module's `src/<module>/CMakeLists.txt` defines the library target
 - Module design docs: `src/<module>/README.md` and `docs/systems/*.md`
+- Sandbox sources: `sandboxes/<name>/*.{h,cpp}` (no `include/` subdirectory; headers are local)
 
 ## Code Style
 
