@@ -249,7 +249,7 @@ cmake --build build --config Release
 **Current Phase:** Sandbox prototyping — core subsystems proven in isolation, not yet promoted to main module tree
 
 **Prototyped (sandboxes):**
-- [x] Procedural terrain generation — continent mask, ridged noise, elevation bands, slope, BFS water distances, soil, roughness, downhill routing (`sandboxes/worldgen/`)
+- [x] Procedural terrain generation — domain-warped continent mask, ridged noise, unified height, elevation bands, slope, aspect, EDT water distances, soil, roughness, D8 downhill routing, flow accumulation (`sandboxes/worldgen/`)
 - [x] Atmospheric weather simulation — static bake (temperature, wind, precipitation, storminess, rain shadow) + atmosphere simulation (coarse-grid T/q/wind/cloud/precip, latent heat, solar forcing, advection, convective gusts, 10 physical invariants enforced) + dynamic terrain tick (rain/snow, snowmelt, infiltration, runoff, evaporation) (`sandboxes/weather/`)
 - [x] Vegetation simulation — two-layer moisture model, hydrology pipeline, canopy feedback, 8 archetypes, 5 death causes, metrics export (`sandboxes/veggen/`)
 - [x] Procedural plant sprite generation — genome-driven per-archetype rendering with health states (`sandboxes/veggen/plant_sprite.cpp`)

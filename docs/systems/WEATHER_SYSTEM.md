@@ -346,7 +346,7 @@ Wind is rendered as directional arrows with a dark outline for visibility agains
 
 ## Integration Points
 
-- **Depends on worldgen terrain:** Elevation, slope, ocean/lake masks, soil holding capacity, roughness, distance-to-ocean, downhill neighbor links, and elevation bands. All terrain data comes from `sandboxes/weather/world_gen.h` and `sandboxes/weather/world_gen.cpp`, which are shared with the worldgen sandbox.
+- **Depends on worldgen terrain:** Elevation, slope, ocean/lake masks, soil holding capacity, roughness, distance-to-ocean, downhill neighbor links, and elevation bands. All terrain data comes from `sandboxes/weather/terrain_gen.h` and `sandboxes/weather/terrain_gen.cpp`, which are kept in sync with the worldgen sandbox pipeline.
 
 - **Feeds into veggen:** The veggen sandbox uses soil moisture, surface water, temperature, and precipitation patterns to drive plant growth. The weather system's dynamic terrain interaction layer produces the environmental state that vegetation responds to.
 

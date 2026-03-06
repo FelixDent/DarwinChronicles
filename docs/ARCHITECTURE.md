@@ -119,13 +119,14 @@ Interactive terrain generation testbed. Eleven-stage pipeline produces a tile ma
 
 `TerrainTile` fields: `elev01`, `band`, `is_ocean/lake`, `slope01`, `aspect`, `dist_ocean/water`, `river_flow`, `soil_fertility/hold`, `roughness`, `elevation` (ridge only), `downhill_x/y`.
 
-- Eleven overlay modes (keys 1-9, 0, -): None, Continental, Slope, ElevBand, DistOcean, DistWater, SoilFertility, SoilHold, Roughness, Aspect, RiverFlow
+- Eleven overlay modes (keys 1-9, 0, -): None, Continental, Slope, ElevBand, DistOcean, DistWater, SoilFertility, SoilHold, Roughness, Aspect, RiverFlow; each overlay legend panel shows a short info description line
+- Starts fully zoomed out via `Camera::fit_world` so the full map is visible at launch
 - Pan (WASD / arrows), zoom (scroll wheel), grid toggle (G), FPS toggle (F)
 - Live parameter tweaking: Tab cycles Seed/WaterLevel/NoiseScale/ContinentThreshold/RidgeStrength; `[`/`]` decrement/increment
 - Regenerate (R) or random seed (Space); screenshot (F12) and log export (L)
 - 6 built-in presets: earth, venus, mars, snowball, tropical, toxic
 
-Source files: `config.h/cpp` (CLI parsing, presets), `world_gen.h/cpp` (generation pipeline), `renderer.h/cpp` (tile rendering, camera), `telemetry.h/cpp` (overlays, stats, FPS), `main.cpp` (event loop). Uses `sandbox` namespace.
+Source files: `config.h/cpp` (CLI parsing, presets), `terrain_gen.h/cpp` (generation pipeline), `renderer.h/cpp` (tile rendering, camera), `telemetry.h/cpp` (overlays, stats, FPS), `main.cpp` (event loop). Uses `sandbox` namespace.
 
 ### sandboxes/weather
 
@@ -156,7 +157,7 @@ Overlay keys 1-9, 0, -, = for: None, Temperature, Precipitation, Moisture (atmos
 
 Headless mode: `sandbox_weather --headless N` runs N sim-days without a window, printing per-2-day rows with latitude-band temperatures (north/equatorial/south), global T min/mean/max, wind by band, q/cloud/precip means, raining cell count, cloudy cell count, and total atmospheric water. The raining/cloudy cell counts monitor spatial patchiness produced by precipitation intermittency. The final summary section shows cumulative peak extremes tracked across the entire run: peak T range, peak heat wave / deep freeze / severe storm / gale / heavy rain cell counts, and peak precipitation intensity per cell. Prints warnings if T spread collapses below 5°C, latitude bands equalize below 3°C spread, or wind dies below 0.5 cells/day. Useful for CI-style atmosphere stability verification without a display.
 
-Source files: `world_gen.h/cpp` (shared terrain), `weather.h/cpp` (static bake), `atmosphere.h/cpp` (atmosphere simulation), `dynamics.h/cpp` (terrain-level tick), `renderer.h/cpp` (tile rendering + overlay dispatch), `telemetry.h/cpp` (FPS, legend, `render_dynamic_legend` takes `AtmosphereStats`), `main.cpp` (event loop). Uses `sandbox` namespace.
+Source files: `terrain_gen.h/cpp` (shared terrain), `weather.h/cpp` (static bake), `atmosphere.h/cpp` (atmosphere simulation), `dynamics.h/cpp` (terrain-level tick), `renderer.h/cpp` (tile rendering + overlay dispatch), `telemetry.h/cpp` (FPS, legend, `render_dynamic_legend` takes `AtmosphereStats`), `main.cpp` (event loop). Uses `sandbox` namespace.
 
 ### sandboxes/veggen
 

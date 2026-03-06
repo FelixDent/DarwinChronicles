@@ -28,7 +28,7 @@ World generation proceeds through eleven sequential stages, timed independently.
 
 ## World Data Model
 
-The world is represented as a `World` struct containing a flat vector of `TerrainTile` values indexed by `(y * width + x)`.
+The world is represented as a `Terrain` struct containing a flat vector of `TerrainTile` values indexed by `(y * width + x)`.
 
 ### TerrainTile Fields
 
@@ -128,6 +128,8 @@ Parameter changes trigger an automatic world regeneration.
 
 The REGENERATE button in the top-right corner of the window also triggers regeneration with a new random seed.
 
+On startup the camera is automatically fitted to show the entire world (`Camera::fit_world`) so the full map is visible without any panning or zooming.
+
 ## Rendering
 
 ### Base Terrain Colors
@@ -157,7 +159,7 @@ Decorations are drawn in a darker shade of the tile's base color. They only appe
 
 ### UI Elements
 
-The renderer displays a terrain legend panel in the bottom-left corner showing elevation band distribution percentages. When an overlay is active, a corresponding overlay legend appears above the terrain legend, showing either a gradient bar with labels or categorical swatches depending on the overlay type.
+The renderer displays a terrain legend panel in the bottom-left corner showing elevation band distribution percentages. When an overlay is active, a corresponding overlay legend appears above the terrain legend, showing either a gradient bar with labels or categorical swatches depending on the overlay type. Each overlay legend also shows a short info description line explaining what the field represents and how it was computed.
 
 The window title bar shows the current world dimensions, seed, tile-under-cursor details (elevation band, height, slope, ocean distance, soil fertility), active overlay name, and active tweak parameter with its value.
 
@@ -171,7 +173,7 @@ The telemetry system (`telemetry.h`, `telemetry.cpp`) computes and displays worl
 - Maximum distance values for ocean and water distance fields
 - Maximum river flow value
 
-Generation timings are recorded for each of the ten timed pipeline stages and printed to the console and the log file.
+Generation timings are recorded for each of the eleven timed pipeline stages and printed to the console and the log file.
 
 ## CLI Usage
 
@@ -201,13 +203,13 @@ Each downstream system maintains its own terrain implementation rather than link
 
 | File | Purpose |
 |---|---|
-| `sandboxes/worldgen/world_gen.h` | `TerrainTile`, `World`, `ElevBand`, `GenerationTimings` definitions and `generate_world` declaration |
-| `sandboxes/worldgen/world_gen.cpp` | All generation pipeline stages: height field (domain-warped), ridge field, unify, ocean/lake flood-fill, slope/aspect/bands, EDT distance fields, soil, roughness (3×3 stddev), downhill routing (D8 + lake outflows), flow accumulation |
+| `sandboxes/worldgen/terrain_gen.h` | `TerrainTile`, `Terrain`, `ElevBand`, `GenerationTimings` definitions and `generate_terrain` declaration |
+| `sandboxes/worldgen/terrain_gen.cpp` | All generation pipeline stages: height field (domain-warped), ridge field, unify, ocean/lake flood-fill, slope/aspect/bands, EDT distance fields, soil, roughness (3×3 stddev), downhill routing (D8 + lake outflows), flow accumulation |
 | `sandboxes/worldgen/config.h` | `EnvParams`, `SandboxConfig`, and `Preset` structures |
 | `sandboxes/worldgen/config.cpp` | Preset definitions and CLI argument parsing |
 | `sandboxes/worldgen/renderer.h` | `Camera` and `Renderer` classes |
 | `sandboxes/worldgen/renderer.cpp` | Camera transforms, terrain color mapping, tile rendering with elevation decoration |
-| `sandboxes/worldgen/telemetry.h` | `OverlayMode` enum (11 modes), `WorldStats`, `FPSCounter`, overlay/legend/button rendering declarations |
-| `sandboxes/worldgen/telemetry.cpp` | Statistics computation, overlay color functions (including aspect and river flow), bitmap font, legend rendering, UI buttons |
+| `sandboxes/worldgen/telemetry.h` | `OverlayMode` enum (11 modes), `TerrainStats`, `FPSCounter`, overlay/legend/button rendering declarations |
+| `sandboxes/worldgen/telemetry.cpp` | Statistics computation, overlay color functions (including aspect and river flow), bitmap font, legend rendering with per-overlay info description text, UI buttons |
 | `sandboxes/worldgen/main.cpp` | SDL2 initialization, event loop, parameter tweaking, screenshot/log export |
 | `sandboxes/worldgen/CMakeLists.txt` | Build configuration via `add_darwin_sandbox(worldgen)` |
