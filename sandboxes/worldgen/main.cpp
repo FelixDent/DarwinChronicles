@@ -1,8 +1,3 @@
-#include "config.h"
-#include "renderer.h"
-#include "telemetry.h"
-#include "world_gen.h"
-
 #include <SDL.h>
 
 #include <csignal>
@@ -15,62 +10,73 @@
 #include <sstream>
 #include <string>
 
+#include "config.h"
+#include "renderer.h"
+#include "telemetry.h"
+#include "terrain_gen.h"
+
 using namespace sandbox;
 
 // ── Tweak parameters ────────────────────────────────────────────────────────
 
 enum class TweakParam {
     Seed,
-    Humidity,
-    Toxicity,
-    NutrientRichness,
-    MeanTemp,
-    NoiseScale,
     WaterLevel,
-    WindDirection,
+    NoiseScale,
+    ContinentThreshold,
+    RidgeStrength,
 
     COUNT
 };
 
 static const char* tweak_name(TweakParam p) {
     switch (p) {
-        case TweakParam::Seed: return "Seed";
-        case TweakParam::Humidity: return "Humidity";
-        case TweakParam::Toxicity: return "Toxicity";
-        case TweakParam::NutrientRichness: return "NutrientRichness";
-        case TweakParam::MeanTemp: return "MeanTemp";
-        case TweakParam::NoiseScale: return "NoiseScale";
-        case TweakParam::WaterLevel: return "WaterLevel";
-        case TweakParam::WindDirection: return "WindDirection";
-        default: return "Unknown";
+        case TweakParam::Seed:
+            return "Seed";
+        case TweakParam::WaterLevel:
+            return "WaterLevel";
+        case TweakParam::NoiseScale:
+            return "NoiseScale";
+        case TweakParam::ContinentThreshold:
+            return "ContinentThreshold";
+        case TweakParam::RidgeStrength:
+            return "RidgeStrength";
+        default:
+            return "Unknown";
     }
 }
 
 static float tweak_value(TweakParam p, const SandboxConfig& cfg) {
     switch (p) {
-        case TweakParam::Seed: return static_cast<float>(cfg.seed);
-        case TweakParam::Humidity: return cfg.env.humidity;
-        case TweakParam::Toxicity: return cfg.env.toxicity_level;
-        case TweakParam::NutrientRichness: return cfg.env.nutrient_richness;
-        case TweakParam::MeanTemp: return cfg.climate.mean_temp_K;
-        case TweakParam::NoiseScale: return cfg.env.noise_scale;
-        case TweakParam::WaterLevel: return cfg.env.water_level;
-        case TweakParam::WindDirection: return cfg.env.wind_direction_deg;
-        default: return 0.0f;
+        case TweakParam::Seed:
+            return static_cast<float>(cfg.seed);
+        case TweakParam::WaterLevel:
+            return cfg.env.water_level;
+        case TweakParam::NoiseScale:
+            return cfg.env.noise_scale;
+        case TweakParam::ContinentThreshold:
+            return cfg.env.continent_threshold;
+        case TweakParam::RidgeStrength:
+            return cfg.env.ridge_strength;
+        default:
+            return 0.0f;
     }
 }
 
 static float tweak_step(TweakParam p) {
     switch (p) {
-        case TweakParam::Seed: return 1.0f;
-        case TweakParam::Humidity: return 0.05f;
-        case TweakParam::Toxicity: return 0.05f;
-        case TweakParam::NutrientRichness: return 0.1f;
-        case TweakParam::MeanTemp: return 5.0f;
-        case TweakParam::NoiseScale: return 0.005f;
-        case TweakParam::WaterLevel: return 0.05f;
-        case TweakParam::WindDirection: return 15.0f;
-        default: return 0.01f;
+        case TweakParam::Seed:
+            return 1.0f;
+        case TweakParam::WaterLevel:
+            return 0.05f;
+        case TweakParam::NoiseScale:
+            return 0.005f;
+        case TweakParam::ContinentThreshold:
+            return 0.05f;
+        case TweakParam::RidgeStrength:
+            return 0.1f;
+        default:
+            return 0.01f;
     }
 }
 
@@ -78,31 +84,23 @@ static void tweak_apply(TweakParam p, SandboxConfig& cfg, float delta) {
     float old_val = tweak_value(p, cfg);
     switch (p) {
         case TweakParam::Seed:
-            cfg.seed = static_cast<uint32_t>(
-                std::max(0.0f, static_cast<float>(cfg.seed) + delta));
-            break;
-        case TweakParam::Humidity:
-            cfg.env.humidity = std::clamp(cfg.env.humidity + delta, 0.0f, 1.0f);
-            break;
-        case TweakParam::Toxicity:
-            cfg.env.toxicity_level = std::clamp(cfg.env.toxicity_level + delta, 0.0f, 1.0f);
-            break;
-        case TweakParam::NutrientRichness:
-            cfg.env.nutrient_richness = std::clamp(cfg.env.nutrient_richness + delta, 0.0f, 2.0f);
-            break;
-        case TweakParam::MeanTemp:
-            cfg.climate.mean_temp_K = std::clamp(cfg.climate.mean_temp_K + delta, 100.0f, 800.0f);
-            break;
-        case TweakParam::NoiseScale:
-            cfg.env.noise_scale = std::clamp(cfg.env.noise_scale + delta, 0.001f, 0.1f);
+            cfg.seed = static_cast<uint32_t>(std::max(0.0f, static_cast<float>(cfg.seed) + delta));
             break;
         case TweakParam::WaterLevel:
             cfg.env.water_level = std::clamp(cfg.env.water_level + delta, 0.0f, 0.8f);
             break;
-        case TweakParam::WindDirection:
-            cfg.env.wind_direction_deg = std::fmod(cfg.env.wind_direction_deg + delta + 360.0f, 360.0f);
+        case TweakParam::NoiseScale:
+            cfg.env.noise_scale = std::clamp(cfg.env.noise_scale + delta, 0.001f, 0.1f);
             break;
-        default: break;
+        case TweakParam::ContinentThreshold:
+            cfg.env.continent_threshold =
+                std::clamp(cfg.env.continent_threshold + delta, 0.0f, 1.0f);
+            break;
+        case TweakParam::RidgeStrength:
+            cfg.env.ridge_strength = std::clamp(cfg.env.ridge_strength + delta, 0.0f, 3.0f);
+            break;
+        default:
+            break;
     }
     float new_val = tweak_value(p, cfg);
     std::cout << "[TWEAK] " << tweak_name(p) << ": " << std::fixed << std::setprecision(3)
@@ -112,43 +110,51 @@ static void tweak_apply(TweakParam p, SandboxConfig& cfg, float delta) {
 // ── Log export ──────────────────────────────────────────────────────────────
 
 static void export_log(const SandboxConfig& cfg, const GenerationTimings& timings,
-                       const WorldStats& stats) {
-    std::string filename = "worldgen_log_" + std::to_string(cfg.seed) + ".txt";
+                       const TerrainStats& stats) {
+    std::string filename = "terraingen_log_" + std::to_string(cfg.seed) + ".txt";
     std::ofstream out(filename);
     if (!out) {
         std::cerr << "Failed to write " << filename << "\n";
         return;
     }
 
-    out << "=== World Generation Log ===\n";
+    out << "=== Terrain Generation Log ===\n";
     out << "Preset: " << cfg.preset << "\n";
     out << "Seed: " << cfg.seed << "\n";
     out << "Size: " << cfg.world_width << "x" << cfg.world_height << "\n\n";
 
     out << "Parameters:\n";
-    out << "  Mean Temp (K):     " << cfg.climate.mean_temp_K << "\n";
-    out << "  Humidity:          " << cfg.env.humidity << "\n";
-    out << "  Toxicity:          " << cfg.env.toxicity_level << "\n";
-    out << "  Nutrient Richness: " << cfg.env.nutrient_richness << "\n";
-    out << "  Water Level:       " << cfg.env.water_level << "\n";
-    out << "  Noise Scale:       " << cfg.env.noise_scale << "\n\n";
+    out << "  Water Level:          " << cfg.env.water_level << "\n";
+    out << "  Noise Scale:          " << cfg.env.noise_scale << "\n";
+    out << "  Continent Threshold:  " << cfg.env.continent_threshold << "\n";
+    out << "  Ridge Strength:       " << cfg.env.ridge_strength << "\n\n";
 
     out << "Generation Timings:\n";
-    out << "  Height:         " << timings.height_ms << " ms\n";
-    out << "  Temperature:    " << timings.temperature_ms << " ms\n";
-    out << "  Moisture:       " << timings.moisture_ms << " ms\n";
-    out << "  Toxicity:       " << timings.toxicity_ms << " ms\n";
-    out << "  Classification: " << timings.classification_ms << " ms\n";
-    out << "  Total:          " << timings.total_ms << " ms\n\n";
+    out << "  Height:       " << timings.height_ms << " ms\n";
+    out << "  Ridge:        " << timings.ridge_ms << " ms\n";
+    out << "  Unify:        " << timings.unify_ms << " ms\n";
+    out << "  Ocean/Lake:   " << timings.ocean_lake_ms << " ms\n";
+    out << "  Slope/Band:   " << timings.slope_band_ms << " ms\n";
+    out << "  Dist Fields:  " << timings.dist_fields_ms << " ms\n";
+    out << "  Soil:         " << timings.soil_ms << " ms\n";
+    out << "  Roughness:    " << timings.roughness_ms << " ms\n";
+    out << "  Downhill:     " << timings.downhill_ms << " ms\n";
+    out << "  River:        " << timings.river_ms << " ms\n";
+    out << "  Total:        " << timings.total_ms << " ms\n\n";
 
-    out << "Biome Distribution:\n";
-    for (size_t i = 0; i < static_cast<size_t>(Biome::COUNT); ++i) {
-        if (stats.biome_counts[i] == 0) continue;
-        float pct = 100.0f * static_cast<float>(stats.biome_counts[i]) /
+    out << "Tile Counts:\n";
+    out << "  Ocean: " << stats.ocean_tiles << "\n";
+    out << "  Lake:  " << stats.lake_tiles << "\n";
+    out << "  Land:  " << stats.land_tiles << "\n";
+
+    const char* band_names[] = {"Water", "Lowland", "Hills", "Mountains"};
+    out << "\nElevation Bands:\n";
+    for (int i = 0; i < 4; ++i) {
+        float pct = 100.0f * static_cast<float>(stats.band_counts[static_cast<size_t>(i)]) /
                     static_cast<float>(stats.total_tiles);
-        out << "  " << std::left << std::setw(18) << biome_name(static_cast<Biome>(i))
-            << stats.biome_counts[i] << " (" << std::fixed << std::setprecision(1) << pct
-            << "%)\n";
+        out << "  " << std::left << std::setw(12) << band_names[i]
+            << stats.band_counts[static_cast<size_t>(i)] << " (" << std::fixed
+            << std::setprecision(1) << pct << "%)\n";
     }
 
     out.close();
@@ -173,7 +179,9 @@ static void take_screenshot(SDL_Renderer* renderer, int w, int h, const std::str
 
 static volatile sig_atomic_t g_quit = 0;
 
-static void signal_handler(int /*sig*/) { g_quit = 1; }
+static void signal_handler(int /*sig*/) {
+    g_quit = 1;
+}
 
 // ── Main ────────────────────────────────────────────────────────────────────
 
@@ -182,29 +190,33 @@ int main(int argc, char* argv[]) {
     std::signal(SIGTERM, signal_handler);
     SandboxConfig cfg = parse_args(argc, argv);
 
-    std::cout << "Darwin Chronicles — World Generation Sandbox\n";
-    std::cout << "Preset: " << cfg.preset << " | Seed: " << cfg.seed << " | Size: "
-              << cfg.world_width << "x" << cfg.world_height << "\n";
-    std::cout << "Climate: mean_temp=" << cfg.climate.mean_temp_K
-              << "K, habitability=" << cfg.climate.habitability_factor << "\n";
-    std::cout << "Env: humidity=" << cfg.env.humidity << ", toxicity=" << cfg.env.toxicity_level
-              << ", nutrients=" << cfg.env.nutrient_richness << "\n\n";
+    std::cout << "Darwin Chronicles — Terrain Generation Sandbox\n";
+    std::cout << "Preset: " << cfg.preset << " | Seed: " << cfg.seed
+              << " | Size: " << cfg.world_width << "x" << cfg.world_height << "\n";
+    std::cout << "Env: water_level=" << cfg.env.water_level
+              << ", noise_scale=" << cfg.env.noise_scale
+              << ", continent=" << cfg.env.continent_threshold
+              << ", ridge=" << cfg.env.ridge_strength << "\n\n";
 
-    // Generate world
+    // Generate terrain
     GenerationTimings timings;
-    World world = generate_world(cfg.world_width, cfg.world_height, cfg.env, cfg.climate, cfg.seed,
-                                 &timings);
+    Terrain terrain = generate_terrain(cfg.world_width, cfg.world_height, cfg.env, cfg.seed, &timings);
 
     std::cout << "Generation timings:\n";
-    std::cout << "  Height:         " << std::fixed << std::setprecision(1) << timings.height_ms
+    std::cout << "  Height:       " << std::fixed << std::setprecision(1) << timings.height_ms
               << " ms\n";
-    std::cout << "  Temperature:    " << timings.temperature_ms << " ms\n";
-    std::cout << "  Moisture:       " << timings.moisture_ms << " ms\n";
-    std::cout << "  Toxicity:       " << timings.toxicity_ms << " ms\n";
-    std::cout << "  Classification: " << timings.classification_ms << " ms\n";
-    std::cout << "  Total:          " << timings.total_ms << " ms\n";
+    std::cout << "  Ridge:        " << timings.ridge_ms << " ms\n";
+    std::cout << "  Unify:        " << timings.unify_ms << " ms\n";
+    std::cout << "  Ocean/Lake:   " << timings.ocean_lake_ms << " ms\n";
+    std::cout << "  Slope/Band:   " << timings.slope_band_ms << " ms\n";
+    std::cout << "  Dist Fields:  " << timings.dist_fields_ms << " ms\n";
+    std::cout << "  Soil:         " << timings.soil_ms << " ms\n";
+    std::cout << "  Roughness:    " << timings.roughness_ms << " ms\n";
+    std::cout << "  Downhill:     " << timings.downhill_ms << " ms\n";
+    std::cout << "  River:        " << timings.river_ms << " ms\n";
+    std::cout << "  Total:        " << timings.total_ms << " ms\n";
 
-    WorldStats stats = compute_stats(world);
+    TerrainStats stats = compute_stats(terrain);
     print_stats(stats);
     std::cout << std::flush;
 
@@ -217,10 +229,9 @@ int main(int argc, char* argv[]) {
     constexpr int INITIAL_WIN_W = 1280;
     constexpr int INITIAL_WIN_H = 720;
 
-    SDL_Window* window = SDL_CreateWindow("Darwin Chronicles — WorldGen Sandbox",
-                                          SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
-                                          INITIAL_WIN_W, INITIAL_WIN_H,
-                                          SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE);
+    SDL_Window* window = SDL_CreateWindow(
+        "Darwin Chronicles — TerrainGen Sandbox", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
+        INITIAL_WIN_W, INITIAL_WIN_H, SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE);
     if (!window) {
         std::cerr << "Window creation failed: " << SDL_GetError() << "\n";
         SDL_Quit();
@@ -236,13 +247,14 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    // Init renderer (biome color mode)
+    // Init renderer
     Renderer tile_renderer;
     tile_renderer.init(sdl_renderer);
 
-    // Camera
+    // Camera — start fully zoomed out to show entire world
     Camera cam;
-    cam.center_on_world(cfg.world_width, cfg.world_height, Renderer::TILE_SIZE);
+    cam.fit_world(cfg.world_width, cfg.world_height, Renderer::TILE_SIZE, INITIAL_WIN_W,
+                  INITIAL_WIN_H);
 
     // State
     OverlayMode overlay = OverlayMode::None;
@@ -272,7 +284,9 @@ int main(int argc, char* argv[]) {
         SDL_Event event;
         while (SDL_PollEvent(&event)) {
             switch (event.type) {
-                case SDL_QUIT: running = false; break;
+                case SDL_QUIT:
+                    running = false;
+                    break;
 
                 case SDL_WINDOWEVENT:
                     if (event.window.event == SDL_WINDOWEVENT_CLOSE) {
@@ -285,7 +299,7 @@ int main(int argc, char* argv[]) {
                         int mx = event.button.x;
                         int my = event.button.y;
                         if (regen_btn.contains(mx, my)) {
-                            cfg.seed = rng();
+                            cfg.seed = static_cast<uint32_t>(rng());
                             std::cout << "[REGEN] Random seed: " << cfg.seed << "\n";
                             needs_regen = true;
                         }
@@ -309,32 +323,72 @@ int main(int argc, char* argv[]) {
                     bool ctrl = (event.key.keysym.mod & KMOD_CTRL) != 0;
 
                     switch (key) {
-                        case SDLK_ESCAPE: running = false; break;
+                        case SDLK_ESCAPE:
+                            running = false;
+                            break;
 
                         // Pan keys
                         case SDLK_w:
-                        case SDLK_UP: key_up = true; break;
+                        case SDLK_UP:
+                            key_up = true;
+                            break;
                         case SDLK_s:
-                        case SDLK_DOWN: key_down = true; break;
+                        case SDLK_DOWN:
+                            key_down = true;
+                            break;
                         case SDLK_a:
-                        case SDLK_LEFT: key_left = true; break;
+                        case SDLK_LEFT:
+                            key_left = true;
+                            break;
                         case SDLK_d:
-                        case SDLK_RIGHT: key_right = true; break;
+                        case SDLK_RIGHT:
+                            key_right = true;
+                            break;
 
-                        // Overlays: 1-6
-                        case SDLK_1: overlay = OverlayMode::None; break;
-                        case SDLK_2: overlay = OverlayMode::Height; break;
-                        case SDLK_3: overlay = OverlayMode::Temperature; break;
-                        case SDLK_4: overlay = OverlayMode::Moisture; break;
-                        case SDLK_5: overlay = OverlayMode::Toxicity; break;
-                        case SDLK_6: overlay = OverlayMode::BiomeColor; break;
-                        case SDLK_7: overlay = OverlayMode::EffectiveMoisture; break;
+                        // Overlays: 1-9
+                        case SDLK_1:
+                            overlay = OverlayMode::None;
+                            break;
+                        case SDLK_2:
+                            overlay = OverlayMode::Continental;
+                            break;
+                        case SDLK_3:
+                            overlay = OverlayMode::Slope;
+                            break;
+                        case SDLK_4:
+                            overlay = OverlayMode::ElevBand;
+                            break;
+                        case SDLK_5:
+                            overlay = OverlayMode::DistOcean;
+                            break;
+                        case SDLK_6:
+                            overlay = OverlayMode::DistWater;
+                            break;
+                        case SDLK_7:
+                            overlay = OverlayMode::SoilFertility;
+                            break;
+                        case SDLK_8:
+                            overlay = OverlayMode::SoilHold;
+                            break;
+                        case SDLK_9:
+                            overlay = OverlayMode::Roughness;
+                            break;
+                        case SDLK_0:
+                            overlay = OverlayMode::Aspect;
+                            break;
+                        case SDLK_MINUS:
+                            overlay = OverlayMode::RiverFlow;
+                            break;
 
                         // Grid
-                        case SDLK_g: show_grid = !show_grid; break;
+                        case SDLK_g:
+                            show_grid = !show_grid;
+                            break;
 
                         // FPS
-                        case SDLK_f: show_fps = !show_fps; break;
+                        case SDLK_f:
+                            show_fps = !show_fps;
+                            break;
 
                         // Tweak: Tab cycles, [/] adjusts
                         case SDLK_TAB: {
@@ -359,9 +413,11 @@ int main(int argc, char* argv[]) {
                         }
 
                         // Regenerate
-                        case SDLK_r: needs_regen = true; break;
+                        case SDLK_r:
+                            needs_regen = true;
+                            break;
                         case SDLK_SPACE: {
-                            cfg.seed = rng();
+                            cfg.seed = static_cast<uint32_t>(rng());
                             std::cout << "[REGEN] Random seed: " << cfg.seed << "\n";
                             needs_regen = true;
                             break;
@@ -372,14 +428,17 @@ int main(int argc, char* argv[]) {
                             int w, h;
                             SDL_GetWindowSize(window, &w, &h);
                             std::string fname =
-                                ctrl ? "worldgen_full_" + std::to_string(cfg.seed) + ".bmp"
-                                     : "worldgen_" + std::to_string(cfg.seed) + ".bmp";
+                                ctrl ? "terraingen_full_" + std::to_string(cfg.seed) + ".bmp"
+                                     : "terraingen_" + std::to_string(cfg.seed) + ".bmp";
                             take_screenshot(sdl_renderer, w, h, fname);
                             break;
                         }
-                        case SDLK_l: export_log(cfg, timings, stats); break;
+                        case SDLK_l:
+                            export_log(cfg, timings, stats);
+                            break;
 
-                        default: break;
+                        default:
+                            break;
                     }
                     break;
                 }
@@ -388,14 +447,23 @@ int main(int argc, char* argv[]) {
                     auto key = event.key.keysym.sym;
                     switch (key) {
                         case SDLK_w:
-                        case SDLK_UP: key_up = false; break;
+                        case SDLK_UP:
+                            key_up = false;
+                            break;
                         case SDLK_s:
-                        case SDLK_DOWN: key_down = false; break;
+                        case SDLK_DOWN:
+                            key_down = false;
+                            break;
                         case SDLK_a:
-                        case SDLK_LEFT: key_left = false; break;
+                        case SDLK_LEFT:
+                            key_left = false;
+                            break;
                         case SDLK_d:
-                        case SDLK_RIGHT: key_right = false; break;
-                        default: break;
+                        case SDLK_RIGHT:
+                            key_right = false;
+                            break;
+                        default:
+                            break;
                     }
                     break;
                 }
@@ -411,9 +479,8 @@ int main(int argc, char* argv[]) {
 
         // Regenerate if needed
         if (needs_regen) {
-            world = generate_world(cfg.world_width, cfg.world_height, cfg.env, cfg.climate,
-                                   cfg.seed, &timings);
-            stats = compute_stats(world);
+            terrain = generate_terrain(cfg.world_width, cfg.world_height, cfg.env, cfg.seed, &timings);
+            stats = compute_stats(terrain);
             std::cout << "[REGEN] seed=" << cfg.seed << " total=" << std::fixed
                       << std::setprecision(1) << timings.total_ms << "ms\n";
             needs_regen = false;
@@ -430,26 +497,26 @@ int main(int argc, char* argv[]) {
             cam.screen_to_tile(mx, my, win_w, win_h, Renderer::TILE_SIZE, tile_x, tile_y);
 
             std::ostringstream title;
-            title << "WorldGen | " << cfg.world_width << "x" << cfg.world_height
+            title << "TerrainGen | " << cfg.world_width << "x" << cfg.world_height
                   << " seed=" << cfg.seed;
 
-            if (tile_x >= 0 && tile_y >= 0 && tile_x < static_cast<int>(world.width) &&
-                tile_y < static_cast<int>(world.height)) {
-                const auto& t = world.tile_at(static_cast<uint32_t>(tile_x),
-                                              static_cast<uint32_t>(tile_y));
-                title << " | (" << tile_x << "," << tile_y << ") "
-                      << biome_name(t.biome) << " h=" << std::fixed << std::setprecision(2)
-                      << t.height << " t=" << std::setprecision(0) << t.temperature_K
-                      << "K m=" << std::setprecision(2) << t.moisture
-                      << " em=" << std::setprecision(2) << t.effective_moisture;
+            if (tile_x >= 0 && tile_y >= 0 && tile_x < static_cast<int>(terrain.width) &&
+                tile_y < static_cast<int>(terrain.height)) {
+                const auto& t =
+                    terrain.tile_at(static_cast<uint32_t>(tile_x), static_cast<uint32_t>(tile_y));
+                title << " | (" << tile_x << "," << tile_y << ") " << elevband_name(t.band)
+                      << " h=" << std::fixed << std::setprecision(2) << t.elev01
+                      << " s=" << std::setprecision(2) << t.slope01
+                      << " do=" << std::setprecision(0) << t.dist_ocean
+                      << " sf=" << std::setprecision(2) << t.soil_fertility;
             }
 
             if (overlay != OverlayMode::None) {
                 title << " | Overlay: " << overlay_name(overlay);
             }
 
-            title << " | Tweak: " << tweak_name(active_tweak) << "="
-                  << std::setprecision(3) << tweak_value(active_tweak, cfg);
+            title << " | Tweak: " << tweak_name(active_tweak) << "=" << std::setprecision(3)
+                  << tweak_value(active_tweak, cfg);
 
             if (show_fps) {
                 title << " | FPS: " << std::setprecision(0) << fps_counter.fps();
@@ -465,15 +532,16 @@ int main(int argc, char* argv[]) {
         SDL_SetRenderDrawColor(sdl_renderer, 20, 20, 30, 255);
         SDL_RenderClear(sdl_renderer);
 
-        tile_renderer.render_world(world, cam, win_w, win_h);
+        tile_renderer.render_terrain(terrain, cam, win_w, win_h);
 
-        render_overlay(sdl_renderer, world, cam, win_w, win_h, overlay, Renderer::TILE_SIZE);
+        render_overlay(sdl_renderer, terrain, stats, cam, win_w, win_h, overlay, Renderer::TILE_SIZE);
 
         if (show_grid) {
-            render_grid(sdl_renderer, world, cam, win_w, win_h, Renderer::TILE_SIZE);
+            render_grid(sdl_renderer, terrain, cam, win_w, win_h, Renderer::TILE_SIZE);
         }
 
         render_legend(sdl_renderer, stats, win_w, win_h);
+        render_overlay_legend(sdl_renderer, stats, overlay, win_w, win_h);
 
         // Regenerate button (top-right)
         {

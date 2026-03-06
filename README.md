@@ -28,12 +28,7 @@ Darwin Chronicles is an emergent sandbox where players observe evolution unfold 
 darwin-chronicles/
 ├── assets/                          # Game assets and data
 │   ├── sprites/                     # Sprite textures and atlases
-│   ├── config/                      # Configuration files
-│   │   ├── planets/                 # Planetary parameter presets
-│   │   ├── scenarios/               # Pre-configured scenarios
-│   │   └── constants.toml           # Global simulation constants
-│   ├── audio/                       # Sound effects and music
-│   └── fonts/                       # UI fonts
+│   └── procedural/                  # Procedurally generated assets (output)
 │
 ├── src/
 │   ├── main.cpp                     # Application entry point
@@ -41,87 +36,57 @@ darwin-chronicles/
 │   ├── environment/                 # Planetary & environmental systems
 │   │   ├── planetary.h/.cpp         # Star, planet, atmosphere models
 │   │   ├── climate.h/.cpp           # Temperature, UV, habitability
-│   │   ├── params.h/.cpp            # Environmental parameters
-│   │   └── README.md                # → See docs/systems/PLANETARY_MODEL.md
+│   │   └── params.h/.cpp            # Environmental parameters
 │   │
 │   ├── world/                       # World generation & grid management
 │   │   ├── grid.h/.cpp              # WorldGrid resource, tile access
 │   │   ├── generation.h/.cpp        # Procedural terrain generation
 │   │   ├── biomes.h/.cpp            # Biome classification & properties
 │   │   ├── fields.h/.cpp            # Macro field generation (noise)
-│   │   ├── regeneration.h/.cpp      # Nutrient regeneration systems
-│   │   └── README.md                # → See docs/systems/WORLD_GENERATION.md
-│   │                                #     docs/systems/NUTRIENT_REGENERATION.md
+│   │   └── regeneration.h/.cpp      # Nutrient regeneration systems
 │   │
 │   ├── organisms/                   # Organism genetics & physiology
 │   │   ├── genome.h/.cpp            # Genome structure & trait extraction
 │   │   ├── brain.h/.cpp             # Variable-depth neural networks
 │   │   ├── metabolism.h/.cpp        # Energy systems & costs
 │   │   ├── sensors.h/.cpp           # Environmental sensing
-│   │   ├── components.h             # ECS components
-│   │   └── README.md                # → See docs/systems/NEURAL_EVOLUTION.md
+│   │   └── components.h             # ECS components
 │   │
 │   ├── evolution/                   # Reproduction & mutation
 │   │   ├── reproduction.h/.cpp      # Reproduction mechanics
 │   │   ├── mutations.h/.cpp         # Genome mutation operators
-│   │   ├── selection.h/.cpp         # Death & survival systems
-│   │   └── README.md
+│   │   └── selection.h/.cpp         # Death & survival systems
 │   │
 │   ├── simulation/                  # Core simulation loop
 │   │   ├── tick.h/.cpp              # Simulation step orchestration
 │   │   ├── organism_update.h/.cpp   # Sense→Think→Act→Metabolize loop
-│   │   ├── scheduling.h/.cpp        # System execution order
-│   │   └── README.md
+│   │   └── scheduling.h/.cpp        # System execution order
 │   │
-│   ├── rendering/                   # Visualization & UI
-│   │   ├── sprite_gen.h/.cpp        # Procedural sprite generation
-│   │   ├── camera.h/.cpp            # Camera controls & zoom
-│   │   ├── debug_viz.h/.cpp         # Debug overlays (nutrients, heat, etc.)
-│   │   ├── ui.h/.cpp                # User interface panels
-│   │   └── README.md                # → See docs/systems/SPRITE_GENERATION.md
-│   │
-│   ├── config/                      # Configuration system
-│   │   ├── loader.h/.cpp            # TOML/JSON loading
-│   │   └── validation.h/.cpp        # Parameter validation
-│   │
-│   └── utils/                       # Utility functions
-│       ├── math.h/.cpp              # Math helpers
-│       └── noise.h/.cpp             # Noise generation wrappers
+│   └── rendering/                   # Visualization & UI
+│       ├── sprite_gen.h/.cpp        # Procedural sprite generation
+│       ├── camera.h/.cpp            # Camera controls & zoom
+│       ├── debug_viz.h/.cpp         # Debug overlays
+│       └── ui.h/.cpp                # User interface panels
 │
-├── tests/                           # Integration tests
-│   ├── planetary_model_tests.cpp
-│   ├── world_generation_tests.cpp
-│   ├── organism_tests.cpp
-│   └── evolution_tests.cpp
+├── sandboxes/                       # Isolated subsystem prototypes (SDL2 only)
+│   ├── worldgen/                    # Terrain generation testbed
+│   ├── weather/                     # Atmospheric weather simulation
+│   ├── veggen/                      # Vegetation simulation
+│   └── spritetest/                  # Sprite rendering test harness
 │
-├── benches/                         # Performance benchmarks
-│   ├── world_regen_bench.cpp
-│   ├── organism_update_bench.cpp
-│   └── sprite_gen_bench.cpp
-│
-├── examples/                        # Runnable examples
-│   ├── earth_like.cpp               # Earth-analog simulation
-│   ├── mars_like.cpp                # Harsh low-resource world
-│   ├── jungle_planet.cpp            # Lush high-nutrient world
-│   └── custom_scenario.cpp          # Template for custom setups
+├── tests/                           # Catch2 integration tests
+├── benches/                         # Google Benchmark suite
+├── examples/                        # Runnable scenario examples
+│   ├── earth_like.cpp
+│   └── mars_like.cpp
 │
 ├── docs/                            # Detailed documentation
 │   ├── systems/                     # System-specific design docs
-│   │   ├── PLANETARY_MODEL.md       # Star/planet/climate physics
-│   │   ├── WORLD_GENERATION.md      # Procedural terrain & biomes
-│   │   ├── NUTRIENT_REGENERATION.md # Dynamic resource systems
-│   │   ├── NEURAL_EVOLUTION.md      # Genome→brain→behavior pipeline
-│   │   └── SPRITE_GENERATION.md     # Visual representation from genome
-│   │
-│   ├── guides/                      # User guides
-│   │   ├── GETTING_STARTED.md       # Quick start guide
-│   │   ├── SCENARIO_CREATION.md     # Creating custom scenarios
-│   │   └── TUNING_GUIDE.md          # Balancing simulation parameters
-│   │
-│   └── architecture/                # Technical architecture
-│       ├── ECS_ORGANIZATION.md      # ECS structure
-│       ├── PERFORMANCE.md           # Optimization strategies
-│       └── DEPENDENCIES.md          # External library choices
+│   │   ├── TERRAIN_GENERATION.md
+│   │   ├── WEATHER_SYSTEM.md
+│   │   └── PLANT_GENERATION.md
+│   ├── decisions/                   # Architecture Decision Records (ADRs)
+│   └── ideation/                    # Design notes (not maintained docs)
 │
 ├── CMakeLists.txt                   # Build configuration
 └── README.md                        # This file
@@ -140,7 +105,7 @@ darwin-chronicles/
 - Climate → biological constraints (nutrient richness, mutation rates, toxicity)
 - Biosphere constraints → organism evolution pressures
 
-**See:** [`docs/systems/PLANETARY_MODEL.md`](docs/systems/PLANETARY_MODEL.md)
+**See:** [`docs/systems/TERRAIN_GENERATION.md`](docs/systems/TERRAIN_GENERATION.md) (sandbox prototype)
 
 ---
 
@@ -155,7 +120,7 @@ darwin-chronicles/
 - Biome classification (15 types: ocean, tundra, rainforest, toxic variants, etc.)
 - Tile properties (nutrients, regen rates, passability) derived from biomes
 
-**See:** [`docs/systems/WORLD_GENERATION.md`](docs/systems/WORLD_GENERATION.md)
+**See:** [`docs/systems/TERRAIN_GENERATION.md`](docs/systems/TERRAIN_GENERATION.md)
 
 ---
 
@@ -171,7 +136,7 @@ darwin-chronicles/
 - WorldGrid resource with efficient flat-array storage
 - Gradient sensing for organism navigation
 
-**See:** [`docs/systems/NUTRIENT_REGENERATION.md`](docs/systems/NUTRIENT_REGENERATION.md)
+*(Planned — not yet implemented. See `src/world/` stubs.)*
 
 ---
 
@@ -187,23 +152,22 @@ darwin-chronicles/
 - Hebbian learning (within-lifetime plasticity)
 - Energy costs: brain (per synapse), movement (kinetic), basal (allometric), reproduction
 
-**See:** [`docs/systems/NEURAL_EVOLUTION.md`](docs/systems/NEURAL_EVOLUTION.md)
+*(Planned — not yet implemented. See `src/organisms/` stubs.)*
 
 ---
 
 ### 5. Procedural Sprite Generation
 
-**What:** Organisms' visual appearance (color, size, pattern, eyes, limbs) is deterministically generated from their genome. Same genome always produces same appearance.
+**What:** Plant visual appearance is deterministically generated per-archetype from genome-like parameters. Organism sprites will be generated from their actual genome. Same parameters always produce the same appearance.
 
-**Why:** Players can visually track evolution. Green organisms (high toxin resistance) replace red ones in toxic zones. Three-eyed creatures (complex brains) emerge in challenging environments. Size, speed, and behavior are all visible.
+**Why:** Players can visually track evolution. Color, size, pattern, and structural complexity will all reflect genetic traits. Prototyped in the veggen sandbox.
 
 **Components:**
-- Genome → SpriteDescriptor (footprint, colors, pattern, eyes, limbs)
-- Multi-tile organisms (body size → 5-29 tiles)
-- Trait-based colors (toxin resistance → red-to-green hue)
-- Behavioral patterns (fast → striped, cautious → spotted)
+- Archetype parameters → layered pixel art sprite (trunk, branches, foliage, health states)
+- Health-state post-processing on shared structure (never regenerates skeleton per health state)
+- Genome → SpriteDescriptor (planned for organism rendering module)
 
-**See:** [`docs/systems/SPRITE_GENERATION.md`](docs/systems/SPRITE_GENERATION.md)
+**See:** [`docs/systems/PLANT_GENERATION.md`](docs/systems/PLANT_GENERATION.md)
 
 ---
 
@@ -282,26 +246,26 @@ cmake --build build --config Release
 
 ## Project Status
 
-**Current Phase:** Early design & prototyping
+**Current Phase:** Sandbox prototyping — core subsystems proven in isolation, not yet promoted to main module tree
 
-**Implemented:**
-- [ ] Planetary climate model
-- [ ] Procedural world generation
-- [ ] WorldGrid resource
-- [ ] Nutrient regeneration system
-- [ ] Genome structure
-- [ ] Neural network forward pass
-- [ ] Basic organism spawning
-- [ ] Sprite generation from genome
+**Prototyped (sandboxes):**
+- [x] Procedural terrain generation — continent mask, ridged noise, elevation bands, slope, BFS water distances, soil, roughness, downhill routing (`sandboxes/worldgen/`)
+- [x] Atmospheric weather simulation — static bake (temperature, wind, precipitation, storminess, rain shadow) + atmosphere simulation (coarse-grid T/q/wind/cloud/precip, latent heat, solar forcing, advection, convective gusts, 10 physical invariants enforced) + dynamic terrain tick (rain/snow, snowmelt, infiltration, runoff, evaporation) (`sandboxes/weather/`)
+- [x] Vegetation simulation — two-layer moisture model, hydrology pipeline, canopy feedback, 8 archetypes, 5 death causes, metrics export (`sandboxes/veggen/`)
+- [x] Procedural plant sprite generation — genome-driven per-archetype rendering with health states (`sandboxes/veggen/plant_sprite.cpp`)
 
-**In Progress:**
-- [ ] Complete organism update loop (sense→think→act→metabolize)
-- [ ] Reproduction & mutation systems
-- [ ] UI panels (population stats, trait histograms)
+**Stub (module tree — not yet implemented):**
+- [ ] Planetary climate model (`src/environment/`)
+- [ ] WorldGrid resource & nutrient regeneration (`src/world/`)
+- [ ] Genome structure & neural network (`src/organisms/`)
+- [ ] Reproduction & mutation systems (`src/evolution/`)
+- [ ] Core simulation tick loop (`src/simulation/`)
+- [ ] Rendering & UI (`src/rendering/`)
 
 **Planned:**
+- [ ] Promote sandbox subsystems into `darwin::*` module tree
+- [ ] Complete organism update loop (sense→think→act→metabolize)
 - [ ] Save/load simulations
-- [ ] Scenario editor
 - [ ] Phylogenetic tree visualization
 - [ ] Performance optimizations (spatial hashing, chunking)
 
@@ -310,11 +274,9 @@ cmake --build build --config Release
 ## Documentation
 
 ### System Design
-- [Planetary Environment Model](docs/systems/PLANETARY_MODEL.md) — Star/planet/climate physics
-- [World Generation](docs/systems/WORLD_GENERATION.md) — Procedural terrain & biomes
-- [Nutrient Regeneration](docs/systems/NUTRIENT_REGENERATION.md) — Dynamic resource systems
-- [Neural Evolution](docs/systems/NEURAL_EVOLUTION.md) — Genome→brain→behavior
-- [Sprite Generation](docs/systems/SPRITE_GENERATION.md) — Visual representation
+- [Terrain Generation](docs/systems/TERRAIN_GENERATION.md) — Continent mask, elevation bands, slope, soil, downhill routing
+- [Weather System](docs/systems/WEATHER_SYSTEM.md) — Static bake, atmosphere simulation, dynamic terrain tick
+- [Plant Generation](docs/systems/PLANT_GENERATION.md) — Vegetation simulation, hydrology, procedural plant sprites
 
 ### Guides
 - [Getting Started](docs/guides/GETTING_STARTED.md) — Installation & first steps

@@ -1,0 +1,89 @@
+#pragma once
+
+#include <SDL.h>
+
+#include "atmosphere.h"
+#include "dynamics.h"
+#include "weather.h"
+#include "terrain_gen.h"
+
+namespace sandbox {
+
+// ── Overlay modes ───────────────────────────────────────────────────────────
+
+enum class OverlayMode {
+    None,
+    Temperature,
+    Precipitation,
+    Moisture,
+    WindDirection,
+    Evaporation,
+    Storminess,
+    MoistureBars,
+    RainShadow,
+    SurfaceWater,
+    SoilMoisture,
+    SnowDepth,
+
+    COUNT
+};
+
+const char* overlay_name(OverlayMode mode);
+
+// ── Camera ──────────────────────────────────────────────────────────────────
+
+struct Camera {
+    float x = 0.0f;
+    float y = 0.0f;
+    float zoom = 1.0f;
+
+    static constexpr float MIN_ZOOM = 0.25f;
+    static constexpr float MAX_ZOOM = 4.0f;
+    static constexpr float PAN_SPEED = 400.0f;
+
+    void pan(float dx, float dy, float dt);
+    void zoom_at(float screen_x, float screen_y, float factor, int win_w, int win_h);
+    void center_on_world(uint32_t world_w, uint32_t world_h, int tile_size);
+
+    SDL_Rect tile_to_screen(int tile_x, int tile_y, int tile_size, int win_w, int win_h) const;
+    void screen_to_tile(int screen_x, int screen_y, int win_w, int win_h, int tile_size,
+                        int& tile_x, int& tile_y) const;
+};
+
+// ── Renderer ────────────────────────────────────────────────────────────────
+
+class Renderer {
+public:
+    static constexpr int TILE_SIZE = 16;
+
+    void init(SDL_Renderer* sdl_renderer);
+    void shutdown();
+
+    void render_terrain(const Terrain& world, const Camera& cam, int win_w, int win_h,
+                      const DynamicState* dyn = nullptr);
+    void render_weather_overlay(const Terrain& world, const ClimateData& climate, const Camera& cam,
+                                int win_w, int win_h, OverlayMode mode,
+                                const DynamicState* dyn = nullptr,
+                                const AtmosphereState* atmo = nullptr);
+    void render_dynamic_overlay(const Terrain& world, const DynamicState& dyn, const Camera& cam,
+                                int win_w, int win_h, OverlayMode mode);
+    void render_wind_arrows(const ClimateData& climate, const Camera& cam, int win_w, int win_h,
+                            const AtmosphereState* atmo = nullptr);
+    void render_moisture_bars(const Terrain& world, const ClimateData& climate, const Camera& cam,
+                              int win_w, int win_h, const DynamicState* dyn = nullptr,
+                              const AtmosphereState* atmo = nullptr);
+
+private:
+    SDL_Renderer* renderer_ = nullptr;
+};
+
+// ── UI Buttons ──────────────────────────────────────────────────────────────
+
+struct ButtonRect {
+    int x, y, w, h;
+    bool contains(int px, int py) const { return px >= x && px < x + w && py >= y && py < y + h; }
+};
+
+ButtonRect render_button(SDL_Renderer* renderer, int x, int y, const char* label, bool hovered);
+
+}  // namespace sandbox

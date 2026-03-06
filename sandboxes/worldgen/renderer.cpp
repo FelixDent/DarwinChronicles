@@ -21,7 +21,8 @@ void fill_triangle(SDL_Renderer* renderer, int x0, int y0, int x1, int y1, int x
         std::swap(y1, y2);
     }
 
-    if (y2 == y0) return;  // Degenerate
+    if (y2 == y0)
+        return;  // Degenerate
 
     for (int y = y0; y <= y2; ++y) {
         // Interpolate x along the two active edges
@@ -45,18 +46,52 @@ void fill_triangle(SDL_Renderer* renderer, int x0, int y0, int x1, int y1, int x
             }
         }
 
-        if (xa > xb) std::swap(xa, xb);
+        if (xa > xb)
+            std::swap(xa, xb);
         SDL_RenderDrawLine(renderer, xa, y, xb, y);
     }
 }
 
-bool is_water(sandbox::Biome b) {
-    return b == sandbox::Biome::Ocean || b == sandbox::Biome::Lake;
-}
+// Terrain color based on TerrainTile data (browns, grays, blues)
+std::array<uint8_t, 3> terrain_color(const sandbox::TerrainTile& tile) {
+    if (tile.is_ocean) {
+        // Ocean: dark→medium blue gradient by depth (deeper = darker)
+        float depth = 1.0f - tile.elev01;  // Higher depth → darker
+        uint8_t r = static_cast<uint8_t>(10.0f + depth * 5.0f);
+        uint8_t g = static_cast<uint8_t>(30.0f + depth * 30.0f);
+        uint8_t b = static_cast<uint8_t>(70.0f + (1.0f - depth) * 80.0f);
+        return {r, g, b};
+    }
+    if (tile.is_lake) {
+        return {70, 140, 200};  // Light blue
+    }
 
-// Biomes where mountains/hills don't make visual sense (dense canopy covers terrain)
-bool suppresses_elevation(sandbox::Biome b) {
-    return b == sandbox::Biome::TropicalForest || b == sandbox::Biome::TemperateRainforest;
+    switch (tile.band) {
+        case sandbox::ElevBand::Lowland: {
+            // Tan/sandy tones
+            float t = tile.elev01;
+            uint8_t r = static_cast<uint8_t>(180.0f + t * 30.0f);
+            uint8_t g = static_cast<uint8_t>(160.0f + t * 20.0f);
+            uint8_t b = static_cast<uint8_t>(110.0f + t * 10.0f);
+            return {r, g, b};
+        }
+        case sandbox::ElevBand::Hills: {
+            // Olive brown tones
+            float t = tile.elev01;
+            uint8_t r = static_cast<uint8_t>(140.0f + t * 20.0f);
+            uint8_t g = static_cast<uint8_t>(125.0f + t * 10.0f);
+            uint8_t b = static_cast<uint8_t>(80.0f + t * 10.0f);
+            return {r, g, b};
+        }
+        case sandbox::ElevBand::Mountains: {
+            // Gray→white gradient by elevation
+            float t = std::clamp((tile.elev01 - 0.7f) / 0.3f, 0.0f, 1.0f);
+            uint8_t v = static_cast<uint8_t>(130.0f + t * 110.0f);
+            return {v, v, static_cast<uint8_t>(v + 5)};
+        }
+        default:
+            return {100, 100, 100};
+    }
 }
 
 }  // namespace
@@ -86,8 +121,16 @@ void Camera::center_on_world(uint32_t world_w, uint32_t world_h, int tile_size) 
     y = static_cast<float>(world_h) * static_cast<float>(tile_size) / 2.0f;
 }
 
-SDL_Rect Camera::tile_to_screen(int tile_x, int tile_y, int tile_size, int win_w,
-                                int win_h) const {
+void Camera::fit_world(uint32_t world_w, uint32_t world_h, int tile_size, int win_w, int win_h) {
+    center_on_world(world_w, world_h, tile_size);
+    float world_px_w = static_cast<float>(world_w) * static_cast<float>(tile_size);
+    float world_px_h = static_cast<float>(world_h) * static_cast<float>(tile_size);
+    float zoom_x = static_cast<float>(win_w) / world_px_w;
+    float zoom_y = static_cast<float>(win_h) / world_px_h;
+    zoom = std::clamp(std::min(zoom_x, zoom_y) * 0.95f, MIN_ZOOM, MAX_ZOOM);
+}
+
+SDL_Rect Camera::tile_to_screen(int tile_x, int tile_y, int tile_size, int win_w, int win_h) const {
     float world_px = static_cast<float>(tile_x * tile_size);
     float world_py = static_cast<float>(tile_y * tile_size);
 
@@ -113,39 +156,43 @@ void Camera::screen_to_tile(int screen_x, int screen_y, int win_w, int win_h, in
 
 // ── Renderer ────────────────────────────────────────────────────────────────
 
-void Renderer::init(SDL_Renderer* sdl_renderer) { renderer_ = sdl_renderer; }
+void Renderer::init(SDL_Renderer* sdl_renderer) {
+    renderer_ = sdl_renderer;
+}
 
-void Renderer::shutdown() { renderer_ = nullptr; }
+void Renderer::shutdown() {
+    renderer_ = nullptr;
+}
 
-void Renderer::render_world(const World& world, const Camera& cam, int win_w, int win_h) {
+void Renderer::render_terrain(const Terrain& terrain, const Camera& cam, int win_w, int win_h) {
     int min_tx, min_ty, max_tx, max_ty;
     cam.screen_to_tile(0, 0, win_w, win_h, TILE_SIZE, min_tx, min_ty);
     cam.screen_to_tile(win_w, win_h, win_w, win_h, TILE_SIZE, max_tx, max_ty);
 
     min_tx = std::max(min_tx - 1, 0);
     min_ty = std::max(min_ty - 1, 0);
-    max_tx = std::min(max_tx + 1, static_cast<int>(world.width) - 1);
-    max_ty = std::min(max_ty + 1, static_cast<int>(world.height) - 1);
+    max_tx = std::min(max_tx + 1, static_cast<int>(terrain.width) - 1);
+    max_ty = std::min(max_ty + 1, static_cast<int>(terrain.height) - 1);
 
     for (int ty = min_ty; ty <= max_ty; ++ty) {
         for (int tx = min_tx; tx <= max_tx; ++tx) {
-            const Tile& tile = world.tile_at(static_cast<uint32_t>(tx), static_cast<uint32_t>(ty));
+            const TerrainTile& tile =
+                terrain.tile_at(static_cast<uint32_t>(tx), static_cast<uint32_t>(ty));
             SDL_Rect dst = cam.tile_to_screen(tx, ty, TILE_SIZE, win_w, win_h);
 
-            auto color = biome_color(tile.biome);
+            auto color = terrain_color(tile);
             SDL_SetRenderDrawColor(renderer_, color[0], color[1], color[2], 255);
             SDL_RenderFillRect(renderer_, &dst);
 
-            // Elevation indicators on land tiles (uses dedicated elevation noise,
-            // not height field — creates coherent mountain ranges and hill clusters)
-            if (!is_water(tile.biome) && !suppresses_elevation(tile.biome) && dst.w >= 4) {
-                float elev = tile.elevation;
+            // Elevation indicators on land tiles
+            if (!tile.is_ocean && !tile.is_lake && dst.w >= 8) {
+                float rough = tile.roughness;
                 // Darker shade for elevation features
                 uint8_t dr = static_cast<uint8_t>(color[0] * 0.55f);
                 uint8_t dg = static_cast<uint8_t>(color[1] * 0.55f);
                 uint8_t db = static_cast<uint8_t>(color[2] * 0.55f);
 
-                if (elev >= 0.45f) {
+                if (rough >= 0.45f) {
                     // Mountains: tall sharp triangle
                     SDL_SetRenderDrawColor(renderer_, dr, dg, db, 255);
                     int cx = dst.x + dst.w / 2;
@@ -155,14 +202,14 @@ void Renderer::render_world(const World& world, const Camera& cam, int win_w, in
                     fill_triangle(renderer_, cx, peak, cx - half_w, base_y, cx + half_w, base_y);
 
                     // Snow cap on the tallest peaks
-                    if (elev >= 0.65f) {
+                    if (rough >= 0.65f) {
                         int snow_y = peak + dst.h / 5;
                         int snow_hw = half_w / 3;
                         SDL_SetRenderDrawColor(renderer_, 240, 240, 255, 255);
                         fill_triangle(renderer_, cx, peak, cx - snow_hw, snow_y, cx + snow_hw,
                                       snow_y);
                     }
-                } else if (elev >= 0.15f) {
+                } else if (rough >= 0.15f) {
                     // Hills: 2 gentle low bumps
                     SDL_SetRenderDrawColor(renderer_, dr, dg, db, 255);
                     int base_y = dst.y + dst.h - dst.h / 5;
@@ -177,16 +224,7 @@ void Renderer::render_world(const World& world, const Camera& cam, int win_w, in
                     int rhw = dst.w / 5;
                     fill_triangle(renderer_, rx, rp, rx - rhw, base_y, rx + rhw, base_y);
                 }
-                // Flat (elev < 0.15): no decoration
-            }
-
-            // Toxic overlay: purple tint on tiles with significant toxicity
-            if (tile.toxins > 0.3f && dst.w >= 2) {
-                float tox_alpha = std::clamp((tile.toxins - 0.3f) / 0.7f, 0.0f, 1.0f);
-                auto alpha = static_cast<uint8_t>(tox_alpha * 100.0f);
-                SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_BLEND);
-                SDL_SetRenderDrawColor(renderer_, 140, 30, 160, alpha);
-                SDL_RenderFillRect(renderer_, &dst);
+                // Flat (rough < 0.15): no decoration
             }
         }
     }

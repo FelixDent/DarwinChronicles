@@ -18,3 +18,6 @@ function(add_darwin_sandbox name)
 endfunction()
 
 add_subdirectory(worldgen)
+add_subdirectory(weather)
+add_subdirectory(veggen)
+add_subdirectory(spritetest)

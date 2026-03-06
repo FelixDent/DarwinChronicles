@@ -1,16 +1,16 @@
 #pragma once
 
-#include "world_gen.h"
-
 #include <SDL.h>
+
+#include "terrain_gen.h"
 
 namespace sandbox {
 
 // ── Camera ──────────────────────────────────────────────────────────────────
 
 struct Camera {
-    float x = 0.0f;   // World-space center X
-    float y = 0.0f;   // World-space center Y
+    float x = 0.0f;  // World-space center X
+    float y = 0.0f;  // World-space center Y
     float zoom = 1.0f;
 
     static constexpr float MIN_ZOOM = 0.25f;
@@ -20,6 +20,7 @@ struct Camera {
     void pan(float dx, float dy, float dt);
     void zoom_at(float screen_x, float screen_y, float factor, int win_w, int win_h);
     void center_on_world(uint32_t world_w, uint32_t world_h, int tile_size);
+    void fit_world(uint32_t world_w, uint32_t world_h, int tile_size, int win_w, int win_h);
 
     // Convert world tile coords to screen coords
     SDL_Rect tile_to_screen(int tile_x, int tile_y, int tile_size, int win_w, int win_h) const;
@@ -38,7 +39,7 @@ public:
     void init(SDL_Renderer* sdl_renderer);
     void shutdown();
 
-    void render_world(const World& world, const Camera& cam, int win_w, int win_h);
+    void render_terrain(const Terrain& terrain, const Camera& cam, int win_w, int win_h);
 
 private:
     SDL_Renderer* renderer_ = nullptr;

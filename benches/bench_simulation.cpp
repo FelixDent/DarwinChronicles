@@ -1,5 +1,4 @@
 #include <benchmark/benchmark.h>
-
 #include <darwin/simulation/tick.h>
 
 static void BM_SimulationTick(benchmark::State& state) {

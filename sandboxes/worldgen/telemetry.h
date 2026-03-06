@@ -1,12 +1,12 @@
 #pragma once
 
-#include "world_gen.h"
-
 #include <SDL.h>
 
 #include <array>
 #include <cstdint>
 #include <string>
+
+#include "terrain_gen.h"
 
 namespace sandbox {
 
@@ -14,12 +14,16 @@ namespace sandbox {
 
 enum class OverlayMode {
     None,
-    Height,
-    Temperature,
-    Moisture,
-    Toxicity,
-    BiomeColor,
-    EffectiveMoisture,
+    Continental,
+    Slope,
+    ElevBand,
+    DistOcean,
+    DistWater,
+    SoilFertility,
+    SoilHold,
+    Roughness,
+    Aspect,
+    RiverFlow,
 
     COUNT
 };
@@ -28,27 +32,35 @@ const char* overlay_name(OverlayMode mode);
 
 // ── Color mapping functions ─────────────────────────────────────────────────
 
-// Returns RGBA color for overlay value
-SDL_Color height_color(float h);
-SDL_Color temperature_color(float temp_K);
-SDL_Color moisture_color(float m);
-SDL_Color toxicity_color(float t);
-SDL_Color effective_moisture_color(float em);
+SDL_Color continental_color(float h);
+SDL_Color slope_color(float s);
+SDL_Color elevband_color(ElevBand band);
+SDL_Color dist_color(float dist, float max_dist);
+SDL_Color soil_color(float v);
+SDL_Color aspect_color(float aspect);
+SDL_Color river_flow_color(float flow, float max_flow);
 
-// ── World statistics ────────────────────────────────────────────────────────
+// ── Terrain statistics ──────────────────────────────────────────────────────
 
-struct WorldStats {
-    std::array<uint32_t, static_cast<size_t>(Biome::COUNT)> biome_counts{};
+struct TerrainStats {
     uint32_t total_tiles = 0;
+    uint32_t ocean_tiles = 0;
+    uint32_t lake_tiles = 0;
+    uint32_t land_tiles = 0;
+    std::array<uint32_t, 4> band_counts{};  // Water, Lowland, Hills, Mountains
 
     float height_min = 0.0f, height_max = 0.0f, height_mean = 0.0f, height_stddev = 0.0f;
-    float temp_min = 0.0f, temp_max = 0.0f, temp_mean = 0.0f, temp_stddev = 0.0f;
-    float moisture_min = 0.0f, moisture_max = 0.0f, moisture_mean = 0.0f, moisture_stddev = 0.0f;
-    float toxicity_min = 0.0f, toxicity_max = 0.0f, toxicity_mean = 0.0f, toxicity_stddev = 0.0f;
+    float slope_min = 0.0f, slope_max = 0.0f, slope_mean = 0.0f, slope_stddev = 0.0f;
+    float dist_ocean_max = 0.0f;
+    float dist_water_max = 0.0f;
+    float fertility_min = 0.0f, fertility_max = 0.0f, fertility_mean = 0.0f;
+    float hold_min = 0.0f, hold_max = 0.0f, hold_mean = 0.0f;
+    float roughness_min = 0.0f, roughness_max = 0.0f, roughness_mean = 0.0f;
+    float river_flow_max = 0.0f;
 };
 
-WorldStats compute_stats(const World& world);
-void print_stats(const WorldStats& stats);
+TerrainStats compute_stats(const Terrain& world);
+void print_stats(const TerrainStats& stats);
 
 // ── FPS counter ─────────────────────────────────────────────────────────────
 
@@ -69,23 +81,24 @@ private:
 
 struct Camera;
 
-void render_overlay(SDL_Renderer* renderer, const World& world, const Camera& cam, int win_w,
-                    int win_h, OverlayMode mode, int tile_size);
+void render_overlay(SDL_Renderer* renderer, const Terrain& world, const TerrainStats& stats,
+                    const Camera& cam, int win_w, int win_h, OverlayMode mode, int tile_size);
 
-void render_grid(SDL_Renderer* renderer, const World& world, const Camera& cam, int win_w,
+void render_grid(SDL_Renderer* renderer, const Terrain& world, const Camera& cam, int win_w,
                  int win_h, int tile_size);
 
 // ── Legend ───────────────────────────────────────────────────────────────────
 
-void render_legend(SDL_Renderer* renderer, const WorldStats& stats, int win_w, int win_h);
+void render_legend(SDL_Renderer* renderer, const TerrainStats& stats, int win_w, int win_h);
+
+void render_overlay_legend(SDL_Renderer* renderer, const TerrainStats& stats, OverlayMode mode,
+                           int win_w, int win_h);
 
 // ── UI Buttons ──────────────────────────────────────────────────────────────
 
 struct ButtonRect {
     int x, y, w, h;
-    bool contains(int px, int py) const {
-        return px >= x && px < x + w && py >= y && py < y + h;
-    }
+    bool contains(int px, int py) const { return px >= x && px < x + w && py >= y && py < y + h; }
 };
 
 ButtonRect render_button(SDL_Renderer* renderer, int x, int y, const char* label, bool hovered);
