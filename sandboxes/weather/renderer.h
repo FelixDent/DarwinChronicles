@@ -4,8 +4,8 @@
 
 #include "atmosphere.h"
 #include "dynamics.h"
-#include "weather.h"
 #include "terrain_gen.h"
+#include "weather.h"
 
 namespace sandbox {
 
@@ -24,6 +24,14 @@ enum class OverlayMode {
     SurfaceWater,
     SoilMoisture,
     SnowDepth,
+    PrecipBudget,
+    UpperWind,
+    Stability,
+    Aridity,
+    Groundwater,
+    Discharge,
+    Geology,
+    SoilTextureOverlay,
 
     COUNT
 };
@@ -44,6 +52,8 @@ struct Camera {
     void pan(float dx, float dy, float dt);
     void zoom_at(float screen_x, float screen_y, float factor, int win_w, int win_h);
     void center_on_world(uint32_t world_w, uint32_t world_h, int tile_size);
+    void fit_world(uint32_t world_w, uint32_t world_h, int tile_size, int win_w, int win_h);
+    void clamp_to_world(uint32_t world_w, uint32_t world_h, int tile_size, int win_w, int win_h);
 
     SDL_Rect tile_to_screen(int tile_x, int tile_y, int tile_size, int win_w, int win_h) const;
     void screen_to_tile(int screen_x, int screen_y, int win_w, int win_h, int tile_size,
@@ -60,7 +70,7 @@ public:
     void shutdown();
 
     void render_terrain(const Terrain& world, const Camera& cam, int win_w, int win_h,
-                      const DynamicState* dyn = nullptr);
+                        const DynamicState* dyn = nullptr, bool dim_glyphs = false);
     void render_weather_overlay(const Terrain& world, const ClimateData& climate, const Camera& cam,
                                 int win_w, int win_h, OverlayMode mode,
                                 const DynamicState* dyn = nullptr,
@@ -85,5 +95,6 @@ struct ButtonRect {
 };
 
 ButtonRect render_button(SDL_Renderer* renderer, int x, int y, const char* label, bool hovered);
+ButtonRect render_status_chip(SDL_Renderer* renderer, int x, int y, const char* label, bool hovered);
 
 }  // namespace sandbox

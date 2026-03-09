@@ -99,7 +99,7 @@ ClimateData bake_weather(const Terrain& world, const AtmosphereConfig& atmo,
             base_temp -= atmo.lapse_rate * elev * 8.0f / 6.5f;
 
             // Ocean moderation: coastal areas have milder temperatures
-            if (tt.is_ocean || tt.is_lake) {
+            if (tt.is_ocean || tt.band == ElevBand::Water) {
                 // Ocean tiles: moderate toward ocean mean
                 base_temp = base_temp * 0.7f + 15.0f * 0.3f;
             } else if (tt.dist_ocean < 10.0f) {
@@ -129,7 +129,7 @@ ClimateData bake_weather(const Terrain& world, const AtmosphereConfig& atmo,
             float v = base_v;
 
             // Mountain deflection: reduce wind magnitude where elevation is high
-            if (!tt.is_ocean && !tt.is_lake && tt.elev01 > 0.5f) {
+            if (!tt.is_ocean && tt.band != ElevBand::Water && tt.elev01 > 0.5f) {
                 float deflect = 1.0f - (tt.elev01 - 0.5f) * 1.5f;
                 deflect = std::max(deflect, 0.1f);
                 u *= deflect;
@@ -164,7 +164,7 @@ ClimateData bake_weather(const Terrain& world, const AtmosphereConfig& atmo,
                 const TerrainTile& tt = world.tiles[idx];
 
                 // Source
-                if (tt.is_ocean || tt.is_lake) {
+                if (tt.is_ocean || tt.band == ElevBand::Water) {
                     flux += atmo.ocean_evap * (0.5f + 0.5f * cos_lat[y]);
                 } else {
                     flux += atmo.land_recycle;
@@ -189,7 +189,7 @@ ClimateData bake_weather(const Terrain& world, const AtmosphereConfig& atmo,
                 size_t idx = static_cast<size_t>(y) * w + static_cast<size_t>(x);
                 const TerrainTile& tt = world.tiles[idx];
 
-                if (tt.is_ocean || tt.is_lake) {
+                if (tt.is_ocean || tt.band == ElevBand::Water) {
                     flux += atmo.ocean_evap * (0.5f + 0.5f * cos_lat[y]);
                 } else {
                     flux += atmo.land_recycle;
@@ -222,7 +222,7 @@ ClimateData bake_weather(const Terrain& world, const AtmosphereConfig& atmo,
             size_t idx = static_cast<size_t>(y) * w + x;
             const TerrainTile& tt = world.tiles[idx];
 
-            if (tt.is_ocean || tt.is_lake) {
+            if (tt.is_ocean || tt.band == ElevBand::Water) {
                 flux += atmo.ocean_evap * 0.5f;
             } else {
                 flux += atmo.land_recycle * 0.5f;
@@ -286,13 +286,19 @@ ClimateData bake_weather(const Terrain& world, const AtmosphereConfig& atmo,
     if (timings)
         timings->evaporation_ms = elapsed_ms(t0);
 
-    // ── Step 6: Effective moisture ──────────────────────────────────────────
+    // ── Step 6: Effective moisture (aridity-based) ─────────────────────────
+    // Use aridity index (precip / PET) instead of raw subtraction.
+    // This correctly distinguishes "800mm rain + cool climate = forest"
+    // from "800mm rain + hot climate = grassland/desert".
     t0 = Clock::now();
 
     for (size_t i = 0; i < size; ++i) {
         float precip = climate.tiles[i].precipitation;
         float evap = climate.tiles[i].evaporation;
-        climate.tiles[i].moisture = std::clamp(precip - evap * 0.5f, 0.0f, 1.0f);
+        // Aridity index: >1 = humid, <0.2 = arid
+        float aridity = precip / (evap + 0.01f);
+        // Map to [0,1] for moisture field: aridity of 1.0 → moisture 0.8
+        climate.tiles[i].moisture = std::clamp(aridity * 0.8f, 0.0f, 1.0f);
     }
 
     if (timings)
@@ -370,7 +376,7 @@ ClimateData bake_weather(const Terrain& world, const AtmosphereConfig& atmo,
             const ClimateTile& ct = climate.tiles[idx];
 
             // Only check dry land tiles
-            if (tt.is_ocean || tt.is_lake)
+            if (tt.is_ocean || tt.band == ElevBand::Water)
                 continue;
             if (ct.precipitation >= SHADOW_PRECIP_THRESHOLD)
                 continue;
@@ -484,7 +490,8 @@ WeatherStats compute_weather_stats(const ClimateData& climate, const Terrain& wo
         if (ct.rain_shadow > 0.2f)
             ++stats.rain_shadow_tiles;
 
-        if (!tt.is_ocean && !tt.is_lake && tt.dist_ocean < 5.0f && ct.precipitation > 0.5f)
+        if (!tt.is_ocean && tt.band != ElevBand::Water && tt.dist_ocean < 5.0f &&
+            ct.precipitation > 0.5f)
             ++stats.wet_coast_tiles;
     }
 
@@ -550,6 +557,38 @@ WeatherStats compute_live_weather_stats(const AtmosphereState& atmo, const Dynam
 
         if (storm > 0.3f)
             ++stats.storm_tiles;
+
+        // Dynamic rain shadow: trace upwind for mountains
+        const auto& tt = world.tile_at(tx, ty);
+        if (!tt.is_ocean && tt.band != ElevBand::Water) {
+            if (speed > 0.05f) {
+                float udx = -u / speed;
+                float udy = -v / speed;
+                float fx = static_cast<float>(tx);
+                float fy = static_cast<float>(ty);
+                float best_shadow = 0.0f;
+                for (int step = 1; step <= 12; ++step) {
+                    fx += udx;
+                    fy += udy;
+                    int ux = static_cast<int>(std::round(fx));
+                    int uy = static_cast<int>(std::round(fy));
+                    if (ux < 0 || ux >= static_cast<int>(world.width) || uy < 0 ||
+                        uy >= static_cast<int>(world.height))
+                        break;
+                    const auto& uptt =
+                        world.tile_at(static_cast<uint32_t>(ux), static_cast<uint32_t>(uy));
+                    float elev_diff = uptt.elev01 - tt.elev01;
+                    if (elev_diff > 0.08f && uptt.elev01 > 0.45f) {
+                        float dist_decay =
+                            1.0f - static_cast<float>(step - 1) / 12.0f;
+                        float s = std::clamp(elev_diff * 3.0f, 0.0f, 1.0f) * dist_decay;
+                        best_shadow = std::max(best_shadow, s);
+                    }
+                }
+                if (best_shadow > 0.2f)
+                    ++stats.rain_shadow_tiles;
+            }
+        }
     }
 
     auto n = static_cast<float>(count);

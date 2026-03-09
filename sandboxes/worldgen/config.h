@@ -13,6 +13,8 @@ struct EnvParams {
     float noise_scale = 0.02f;
     float continent_threshold = 0.55f;
     float ridge_strength = 1.0f;
+    uint32_t plate_count = 12;        // 0 = legacy noise mode, >0 = tectonic plates
+    float continental_ratio = 0.40f;  // fraction of plates that are continental
 };
 
 // ── Sandbox configuration ───────────────────────────────────────────────────
@@ -22,6 +24,7 @@ struct SandboxConfig {
     uint32_t world_width = 256;
     uint32_t world_height = 256;
     std::string preset = "earth";
+    bool headless = false;  // --headless: generate + export BMP + stats, no window
 
     EnvParams env;
 

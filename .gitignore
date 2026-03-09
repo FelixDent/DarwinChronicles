@@ -29,6 +29,19 @@ _deps/
 *~
 .cache/
 
+# Secrets / credentials
+.env
+.mcp.json
+
+# Generated output files
+*.bmp
+*.png
+!examples/*.png
+
+# Claude agent internals
+.claude/agent-memory/
+.claude/agents/
+
 # OS files
 .DS_Store
 Thumbs.db

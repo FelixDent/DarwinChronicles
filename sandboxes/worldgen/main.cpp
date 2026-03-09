@@ -133,18 +133,15 @@ static void export_log(const SandboxConfig& cfg, const GenerationTimings& timing
     out << "  Height:       " << timings.height_ms << " ms\n";
     out << "  Ridge:        " << timings.ridge_ms << " ms\n";
     out << "  Unify:        " << timings.unify_ms << " ms\n";
-    out << "  Ocean/Lake:   " << timings.ocean_lake_ms << " ms\n";
+    out << "  Ocean:        " << timings.ocean_ms << " ms\n";
     out << "  Slope/Band:   " << timings.slope_band_ms << " ms\n";
     out << "  Dist Fields:  " << timings.dist_fields_ms << " ms\n";
-    out << "  Soil:         " << timings.soil_ms << " ms\n";
+    out << "  Geology:      " << timings.geology_ms << " ms\n";
     out << "  Roughness:    " << timings.roughness_ms << " ms\n";
-    out << "  Downhill:     " << timings.downhill_ms << " ms\n";
-    out << "  River:        " << timings.river_ms << " ms\n";
     out << "  Total:        " << timings.total_ms << " ms\n\n";
 
     out << "Tile Counts:\n";
     out << "  Ocean: " << stats.ocean_tiles << "\n";
-    out << "  Lake:  " << stats.lake_tiles << "\n";
     out << "  Land:  " << stats.land_tiles << "\n";
 
     const char* band_names[] = {"Water", "Lowland", "Hills", "Mountains"};
@@ -200,27 +197,257 @@ int main(int argc, char* argv[]) {
 
     // Generate terrain
     GenerationTimings timings;
-    Terrain terrain = generate_terrain(cfg.world_width, cfg.world_height, cfg.env, cfg.seed, &timings);
+    Terrain terrain =
+        generate_terrain(cfg.world_width, cfg.world_height, cfg.env, cfg.seed, &timings);
 
     std::cout << "Generation timings:\n";
     std::cout << "  Height:       " << std::fixed << std::setprecision(1) << timings.height_ms
               << " ms\n";
     std::cout << "  Ridge:        " << timings.ridge_ms << " ms\n";
     std::cout << "  Unify:        " << timings.unify_ms << " ms\n";
-    std::cout << "  Ocean/Lake:   " << timings.ocean_lake_ms << " ms\n";
+    std::cout << "  Ocean:        " << timings.ocean_ms << " ms\n";
     std::cout << "  Slope/Band:   " << timings.slope_band_ms << " ms\n";
     std::cout << "  Dist Fields:  " << timings.dist_fields_ms << " ms\n";
-    std::cout << "  Soil:         " << timings.soil_ms << " ms\n";
+    std::cout << "  Geology:      " << timings.geology_ms << " ms\n";
     std::cout << "  Roughness:    " << timings.roughness_ms << " ms\n";
-    std::cout << "  Downhill:     " << timings.downhill_ms << " ms\n";
-    std::cout << "  River:        " << timings.river_ms << " ms\n";
     std::cout << "  Total:        " << timings.total_ms << " ms\n";
 
     TerrainStats stats = compute_stats(terrain);
     print_stats(stats);
     std::cout << std::flush;
 
-    // SDL2 init
+    // ── Headless mode: render BMP and exit ──────────────────────────────
+    if (cfg.headless) {
+        if (SDL_Init(SDL_INIT_VIDEO) < 0) {
+            std::cerr << "SDL_Init failed: " << SDL_GetError() << "\n";
+            return 1;
+        }
+        // Render terrain to a surface (1 pixel per tile)
+        uint32_t tw = cfg.world_width;
+        uint32_t th = cfg.world_height;
+        SDL_Surface* surf = SDL_CreateRGBSurfaceWithFormat(
+            0, static_cast<int>(tw), static_cast<int>(th), 32, SDL_PIXELFORMAT_RGBA32);
+        if (!surf) {
+            std::cerr << "Failed to create surface: " << SDL_GetError() << "\n";
+            return 1;
+        }
+        SDL_LockSurface(surf);
+        auto* pixels = static_cast<uint32_t*>(surf->pixels);
+        for (uint32_t y = 0; y < th; ++y) {
+            for (uint32_t x = 0; x < tw; ++x) {
+                const auto& tile = terrain.tile_at(x, y);
+                // Compute terrain color (same logic as renderer.cpp)
+                uint8_t r, g, b;
+                if (tile.is_ocean) {
+                    // Continuous depth-based ocean coloring with smooth gradient
+                    float depth = cfg.env.water_level - tile.elev01;
+                    float max_depth = cfg.env.water_level;
+                    float depth_norm = std::clamp(depth / std::max(max_depth, 0.01f), 0.0f, 1.0f);
+
+                    // Compute local depth gradient for shelf detection
+                    float depth_slope = 0.0f;
+                    if (x > 0 && x < tw - 1 && y > 0 && y < th - 1) {
+                        float dx =
+                            terrain.tile_at(x + 1, y).elev01 - terrain.tile_at(x - 1, y).elev01;
+                        float dy =
+                            terrain.tile_at(x, y + 1).elev01 - terrain.tile_at(x, y - 1).elev01;
+                        depth_slope = std::sqrt(dx * dx + dy * dy);
+                    }
+
+                    // Continuous depth-based ocean coloring — subtle gradient
+                    // Colors chosen to avoid a bright "halo" around coasts
+                    float d = depth_norm;
+                    // Non-linear depth mapping: gamma compress shallow depths
+                    // so the shelf doesn't create a bright "ring" — it merges quickly to mid-ocean
+                    float dg = std::pow(d, 0.6f);  // gamma compress: shallow jumps to mid fast
+                    float cr = 25.0f * (1.0f - dg) * (1.0f - dg) + 16.0f * dg * (1.0f - dg) +
+                               8.0f * dg * dg;
+                    float cg = 52.0f * (1.0f - dg) * (1.0f - dg) + 42.0f * dg * (1.0f - dg) +
+                               22.0f * dg * dg;
+                    float cb = 95.0f * (1.0f - dg) * (1.0f - dg) + 92.0f * dg * (1.0f - dg) +
+                               78.0f * dg * dg;
+
+                    // Very subtle depth-slope shading (no bright shelf highlight)
+                    float depth_shade = std::clamp(1.0f - depth_slope * 15.0f, 0.85f, 1.0f);
+                    cr *= depth_shade;
+                    cg *= depth_shade;
+                    cb *= depth_shade;
+
+                    r = static_cast<uint8_t>(std::clamp(cr, 0.0f, 255.0f));
+                    g = static_cast<uint8_t>(std::clamp(cg, 0.0f, 255.0f));
+                    b = static_cast<uint8_t>(std::clamp(cb, 0.0f, 255.0f));
+                } else {
+                    // Hillshade: directional lighting from NW with enhanced contrast
+                    float shade = 1.0f;
+                    if (x > 0 && x < tw - 1 && y > 0 && y < th - 1) {
+                        float dzdx =
+                            terrain.tile_at(x + 1, y).elev01 - terrain.tile_at(x - 1, y).elev01;
+                        float dzdy =
+                            terrain.tile_at(x, y + 1).elev01 - terrain.tile_at(x, y - 1).elev01;
+                        // Light from NW (azimuth 315°, altitude 40° for more shadow)
+                        constexpr float az = 5.497787f;  // 315° in rad
+                        constexpr float alt = 0.6981f;   // 40° in rad
+                        float slope_mag = std::sqrt(dzdx * dzdx + dzdy * dzdy);
+                        float slope_angle = std::atan(
+                            slope_mag * 6.0f);  // moderate exaggeration (photoreal, not metallic)
+                        float aspect = std::atan2(-dzdy, -dzdx);
+                        shade = std::cos(slope_angle) * std::sin(alt) +
+                                std::sin(slope_angle) * std::cos(alt) * std::cos(az - aspect);
+                        shade = std::clamp(shade * 0.7f + 0.3f, 0.2f, 1.05f);
+                    }
+                    // Climate-driven biome coloring with soft transitions
+                    float norm_elev = std::clamp(
+                        (tile.elev01 - cfg.env.water_level) / (1.0f - cfg.env.water_level), 0.0f,
+                        1.0f);
+
+                    // Climate model: temperature from latitude + lapse rate
+                    float lat_t = static_cast<float>(y) / static_cast<float>(th);
+                    float lat_factor = 1.0f - 2.0f * std::abs(lat_t - 0.5f);
+                    float temp = lat_factor * 30.0f - norm_elev * 40.0f;
+
+                    // Moisture: multiple factors so it doesn't look like a coastal outline
+                    float base_moisture = std::clamp(1.0f - tile.dist_ocean * 0.02f, 0.15f, 0.85f);
+                    float lat_moist = 0.65f + 0.35f * lat_factor;
+                    // Steep slopes: exposed rock = less green
+                    float slope_moisture = std::clamp(1.0f - tile.slope01 * 2.0f, 0.3f, 1.0f);
+                    // Continental drying
+                    float inland_dry =
+                        (tile.dist_ocean > 25.0f)
+                            ? std::clamp(1.0f - (tile.dist_ocean - 25.0f) * 0.01f, 0.45f, 1.0f)
+                            : 1.0f;
+                    // Mesoscale variation from terrain roughness + aspect to break uniformity
+                    float meso_noise =
+                        (tile.roughness - 0.5f) * 0.25f + std::cos(tile.aspect * 2.0f) * 0.06f;
+                    // Soil proxy: ridges/high-elev bare, valleys/low-elev have soil
+                    float soil_proxy =
+                        std::clamp(1.0f - norm_elev * 0.5f - tile.slope01 * 1.5f, 0.25f, 1.0f);
+                    float moisture = std::clamp(
+                        base_moisture * lat_moist * slope_moisture * inland_dry * soil_proxy +
+                            meso_noise,
+                        0.08f, 1.0f);
+                    // River moisture contribution removed (rivers now dynamic)
+
+                    // Soft logistic weighting for each biome (smooth ecotone transitions)
+                    auto logistic = [](float x, float center, float width) -> float {
+                        return 1.0f / (1.0f + std::exp(-(x - center) / std::max(width, 0.01f)));
+                    };
+
+                    // Biome weights (sharper logistic transitions — visible ecotones, not mush)
+                    float w_tundra = (1.0f - logistic(temp, -5.0f, 1.2f));
+                    float w_boreal =
+                        logistic(temp, -5.0f, 1.2f) * (1.0f - logistic(temp, 5.0f, 1.5f));
+                    float w_alpine =
+                        logistic(norm_elev, 0.55f, 0.04f) * logistic(temp, -3.0f, 2.0f);
+                    float w_arid =
+                        (1.0f - logistic(moisture, 0.30f, 0.04f)) * logistic(temp, 12.0f, 2.0f);
+                    float w_steppe = logistic(moisture, 0.25f, 0.04f) *
+                                     (1.0f - logistic(moisture, 0.50f, 0.04f)) *
+                                     logistic(temp, 10.0f, 2.0f);
+                    float w_tropical =
+                        logistic(temp, 20.0f, 1.5f) * logistic(moisture, 0.60f, 0.05f);
+                    float w_temperate = logistic(temp, 5.0f, 1.5f) *
+                                        logistic(moisture, 0.40f, 0.05f) *
+                                        (1.0f - logistic(temp, 22.0f, 2.0f));
+
+                    // Biome colors
+                    struct BiomeColor {
+                        float r, g, b;
+                    };
+                    BiomeColor tundra = {170.0f, 175.0f, 185.0f};
+                    BiomeColor boreal = {75.0f + norm_elev * 15.0f, 90.0f + norm_elev * 10.0f,
+                                         68.0f};
+                    BiomeColor alpine = {135.0f - norm_elev * 15.0f, 112.0f - norm_elev * 10.0f,
+                                         100.0f + norm_elev * 20.0f};
+                    BiomeColor arid = {192.0f + norm_elev * 10.0f, 172.0f - norm_elev * 8.0f,
+                                       125.0f - norm_elev * 15.0f};
+                    BiomeColor steppe = {148.0f + norm_elev * 20.0f, 142.0f - norm_elev * 5.0f,
+                                         75.0f};
+                    BiomeColor tropical = {48.0f + norm_elev * 25.0f, 98.0f + norm_elev * 15.0f,
+                                           38.0f + norm_elev * 10.0f};
+                    BiomeColor temperate = {85.0f + norm_elev * 50.0f, 118.0f - norm_elev * 5.0f,
+                                            58.0f + norm_elev * 8.0f};
+
+                    // Weighted blend of all biome colors
+                    float total_w = w_tundra + w_boreal + w_alpine + w_arid + w_steppe +
+                                    w_tropical + w_temperate;
+                    total_w = std::max(total_w, 0.01f);
+                    float cr = (w_tundra * tundra.r + w_boreal * boreal.r + w_alpine * alpine.r +
+                                w_arid * arid.r + w_steppe * steppe.r + w_tropical * tropical.r +
+                                w_temperate * temperate.r) /
+                               total_w;
+                    float cg = (w_tundra * tundra.g + w_boreal * boreal.g + w_alpine * alpine.g +
+                                w_arid * arid.g + w_steppe * steppe.g + w_tropical * tropical.g +
+                                w_temperate * temperate.g) /
+                               total_w;
+                    float cb = (w_tundra * tundra.b + w_boreal * boreal.b + w_alpine * alpine.b +
+                                w_arid * arid.b + w_steppe * steppe.b + w_tropical * tropical.b +
+                                w_temperate * temperate.b) /
+                               total_w;
+
+                    // Snow: temperature + elevation + aspect + slope + moisture
+                    if (temp < 0.0f && norm_elev > 0.35f) {
+                        float slope_mag_local = 0.0f;
+                        if (x > 0 && x < tw - 1 && y > 0 && y < th - 1) {
+                            float sdx =
+                                terrain.tile_at(x + 1, y).elev01 - terrain.tile_at(x - 1, y).elev01;
+                            float sdy =
+                                terrain.tile_at(x, y + 1).elev01 - terrain.tile_at(x, y - 1).elev01;
+                            slope_mag_local = std::sqrt(sdx * sdx + sdy * sdy);
+                        }
+                        float snow = std::clamp(-temp / 12.0f, 0.0f, 0.80f);
+                        // Steep slopes shed snow
+                        snow *= std::clamp(1.0f - slope_mag_local * 10.0f, 0.0f, 1.0f);
+                        // Elevation ramp
+                        snow *= std::clamp((norm_elev - 0.35f) / 0.30f, 0.0f, 1.0f);
+                        // Aspect: pole-facing slopes accumulate more snow
+                        float pole_facing =
+                            (lat_t < 0.5f)
+                                ? std::clamp(-std::sin(tile.aspect) * 0.5f + 0.5f, 0.3f, 1.0f)
+                                : std::clamp(std::sin(tile.aspect) * 0.5f + 0.5f, 0.3f, 1.0f);
+                        snow *= pole_facing;
+                        // Moisture: wetter areas have more snow
+                        snow *= std::clamp(moisture * 1.3f, 0.4f, 1.0f);
+                        // Slight blue-white tint variation
+                        float warm_snow = std::clamp(temp / -5.0f, 0.0f, 1.0f);
+                        float sr = 228.0f + warm_snow * 10.0f;
+                        float sg = 233.0f + warm_snow * 8.0f;
+                        float sb = 242.0f + warm_snow * 6.0f;
+                        cr = cr * (1.0f - snow) + sr * snow;
+                        cg = cg * (1.0f - snow) + sg * snow;
+                        cb = cb * (1.0f - snow) + sb * snow;
+                    }
+                    // Aspect-based albedo variation: sun-facing slopes slightly warmer,
+                    // shadow-facing cooler/darker. Adds material variety to mountains.
+                    if (norm_elev > 0.25f) {
+                        float aspect_v = tile.aspect;
+                        // South-facing (NH) or north-facing (SH) warmer
+                        float sun_facing = std::cos(aspect_v) * (lat_t < 0.5f ? -1.0f : 1.0f);
+                        float elev_scale = std::clamp((norm_elev - 0.25f) * 3.0f, 0.0f, 1.0f);
+                        float albedo_shift = sun_facing * elev_scale * 8.0f;
+                        cr += albedo_shift;
+                        cg += albedo_shift * 0.7f;
+                        cb -= albedo_shift * 0.3f;  // warm shift
+                    }
+                    r = static_cast<uint8_t>(std::clamp(cr * shade, 0.0f, 255.0f));
+                    g = static_cast<uint8_t>(std::clamp(cg * shade, 0.0f, 255.0f));
+                    b = static_cast<uint8_t>(std::clamp(cb * shade, 0.0f, 255.0f));
+                }
+                // Rivers removed from static terrain (now dynamic)
+                pixels[y * (static_cast<uint32_t>(surf->pitch) / 4) + x] =
+                    SDL_MapRGBA(surf->format, r, g, b, 255);
+            }
+        }
+        SDL_UnlockSurface(surf);
+
+        std::string fname = "terrain_" + cfg.preset + "_" + std::to_string(cfg.seed) + ".bmp";
+        SDL_SaveBMP(surf, fname.c_str());
+        SDL_FreeSurface(surf);
+        std::cout << "[HEADLESS] BMP saved to " << fname << "\n";
+        SDL_Quit();
+        return 0;
+    }
+
+    // SDL2 init (non-headless path)
     if (SDL_Init(SDL_INIT_VIDEO) < 0) {
         std::cerr << "SDL_Init failed: " << SDL_GetError() << "\n";
         return 1;
@@ -362,22 +589,16 @@ int main(int argc, char* argv[]) {
                             overlay = OverlayMode::DistOcean;
                             break;
                         case SDLK_6:
-                            overlay = OverlayMode::DistWater;
-                            break;
-                        case SDLK_7:
-                            overlay = OverlayMode::SoilFertility;
-                            break;
-                        case SDLK_8:
-                            overlay = OverlayMode::SoilHold;
-                            break;
-                        case SDLK_9:
                             overlay = OverlayMode::Roughness;
                             break;
-                        case SDLK_0:
+                        case SDLK_7:
                             overlay = OverlayMode::Aspect;
                             break;
-                        case SDLK_MINUS:
-                            overlay = OverlayMode::RiverFlow;
+                        case SDLK_8:
+                            overlay = OverlayMode::Geology;
+                            break;
+                        case SDLK_9:
+                            overlay = OverlayMode::SoilTexture;
                             break;
 
                         // Grid
@@ -479,7 +700,8 @@ int main(int argc, char* argv[]) {
 
         // Regenerate if needed
         if (needs_regen) {
-            terrain = generate_terrain(cfg.world_width, cfg.world_height, cfg.env, cfg.seed, &timings);
+            terrain =
+                generate_terrain(cfg.world_width, cfg.world_height, cfg.env, cfg.seed, &timings);
             stats = compute_stats(terrain);
             std::cout << "[REGEN] seed=" << cfg.seed << " total=" << std::fixed
                       << std::setprecision(1) << timings.total_ms << "ms\n";
@@ -508,7 +730,8 @@ int main(int argc, char* argv[]) {
                       << " h=" << std::fixed << std::setprecision(2) << t.elev01
                       << " s=" << std::setprecision(2) << t.slope01
                       << " do=" << std::setprecision(0) << t.dist_ocean
-                      << " sf=" << std::setprecision(2) << t.soil_fertility;
+                      << " rock=" << rock_type_name(t.rock)
+                      << " soil=" << soil_texture_name(t.soil);
             }
 
             if (overlay != OverlayMode::None) {
@@ -534,7 +757,8 @@ int main(int argc, char* argv[]) {
 
         tile_renderer.render_terrain(terrain, cam, win_w, win_h);
 
-        render_overlay(sdl_renderer, terrain, stats, cam, win_w, win_h, overlay, Renderer::TILE_SIZE);
+        render_overlay(sdl_renderer, terrain, stats, cam, win_w, win_h, overlay,
+                       Renderer::TILE_SIZE);
 
         if (show_grid) {
             render_grid(sdl_renderer, terrain, cam, win_w, win_h, Renderer::TILE_SIZE);

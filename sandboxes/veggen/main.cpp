@@ -30,10 +30,8 @@ static int run_auto_screenshots(uint32_t seed) {
     constexpr int WIN_W = 800;
     constexpr int WIN_H = 700;
     SDL_Window* window = SDL_CreateWindow("VegGen Auto", SDL_WINDOWPOS_CENTERED,
-                                          SDL_WINDOWPOS_CENTERED, WIN_W, WIN_H,
-                                          SDL_WINDOW_SHOWN);
-    SDL_Renderer* sdl_renderer =
-        SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
+                                          SDL_WINDOWPOS_CENTERED, WIN_W, WIN_H, SDL_WINDOW_SHOWN);
+    SDL_Renderer* sdl_renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
     if (!sdl_renderer) {
         std::cerr << "Renderer creation failed\n";
         SDL_DestroyWindow(window);
@@ -76,12 +74,12 @@ static int run_auto_screenshots(uint32_t seed) {
             std::snprintf(fname, sizeof(fname), "veggen_%02d_%s_%s.bmp", preset,
                           BIOME_PRESETS[preset].name, SNAPSHOT_LABELS[snap]);
             for (char* p = fname; *p; ++p)
-                if (*p == ' ') *p = '_';
+                if (*p == ' ')
+                    *p = '_';
             SDL_SaveBMP(sshot, fname);
             SDL_FreeSurface(sshot);
             std::printf("Saved: %s (day %.0f, %d plants)\n", fname,
-                        static_cast<double>(sim.elapsed_days),
-                        static_cast<int>(sim.plants.size()));
+                        static_cast<double>(sim.elapsed_days), static_cast<int>(sim.plants.size()));
         }
     }
 
@@ -142,8 +140,8 @@ int main(int argc, char* argv[]) {
 
     // Metrics mode: sandbox_veggen --metrics [seed] [years]
     if (argc >= 2 && std::strcmp(argv[1], "--metrics") == 0) {
-        uint32_t seed = (argc >= 3) ? static_cast<uint32_t>(std::strtoul(argv[2], nullptr, 10))
-                                    : 42;
+        uint32_t seed =
+            (argc >= 3) ? static_cast<uint32_t>(std::strtoul(argv[2], nullptr, 10)) : 42;
         float years = (argc >= 4) ? static_cast<float>(std::atof(argv[3])) : 10.0f;
         return run_metrics(seed, years);
     }
@@ -322,13 +320,12 @@ int main(int argc, char* argv[]) {
                             SDL_GetWindowSize(window, &sw, &sh);
                             SDL_Surface* sshot = SDL_CreateRGBSurfaceWithFormat(
                                 0, sw, sh, 32, SDL_PIXELFORMAT_RGBA32);
-                            SDL_RenderReadPixels(sdl_renderer, nullptr,
-                                                 SDL_PIXELFORMAT_RGBA32, sshot->pixels,
-                                                 sshot->pitch);
+                            SDL_RenderReadPixels(sdl_renderer, nullptr, SDL_PIXELFORMAT_RGBA32,
+                                                 sshot->pixels, sshot->pitch);
                             static int screenshot_num = 0;
                             char fname[128];
-                            std::snprintf(fname, sizeof(fname),
-                                          "veggen_screenshot_%02d.bmp", screenshot_num++);
+                            std::snprintf(fname, sizeof(fname), "veggen_screenshot_%02d.bmp",
+                                          screenshot_num++);
                             SDL_SaveBMP(sshot, fname);
                             SDL_FreeSurface(sshot);
                             std::cout << "[SCREENSHOT] " << fname << "\n";

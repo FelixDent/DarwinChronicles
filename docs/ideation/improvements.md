@@ -1,458 +1,327 @@
-I read through your design doc here: . Overall it’s **very well structured**—the pipeline is clean, deterministic, and debuggable, which is exactly what you want for a worldgen sandbox feeding later simulation layers (weather, vegetation, etc.).
+You’re running into a **very common failure mode of procedural terrain**: the generator is producing **noise classification**, not **geomorphology**. The result is exactly what you’re seeing:
 
-That said, there are a few **architectural improvements and future pitfalls** worth addressing now while the system is still small.
+* coastlines look blobby
+* lakes are single-tile speckles
+* mountains hug coasts
+* no peninsulas / archipelagos / inland basins
+* no river basins or erosion patterns
 
-I’ll split feedback into:
+This happens when terrain is derived primarily from **thresholded noise layers** instead of **process-driven constraints**.
 
-1. **Conceptual issues (simulation realism / future integration)**
-2. **Algorithmic improvements**
-3. **Data model improvements**
-4. **Performance / scaling**
-5. **Minor design improvements**
-
----
-
-# 1. Biggest Conceptual Issue: Two Separate Height Systems
-
-Right now you have:
-
-* **Height field** → determines water / land
-* **Ridged elevation field** → purely visual mountains
-
-> “This field is purely visual and does not affect the height field used for water classification.” 
-
-This will eventually cause problems for:
-
-* river routing
-* drainage basins
-* weather orographic uplift
-* erosion
-* vegetation
-* pathfinding realism
-
-Example failure case:
-
-```
-height_field: lowland
-ridged_field: mountain ridge
-```
-
-Your renderer shows **a mountain**, but hydrology thinks **it’s flat**.
-
-Result:
-
-* rivers flow through mountains
-* lakes appear on mountain peaks
-* rain shadows don't work
-
-### Better approach
-
-Mountains should modify the actual height field.
-
-Instead of:
-
-```
-height = continent_noise
-visual_mountains = ridge_noise
-```
-
-Use:
-
-```
-height = continent_noise + ridge_noise * mask
-```
-
-Then derive:
-
-```
-slope
-roughness
-bands
-```
-
-from the final height.
-
-This keeps **all systems consistent**.
+Let’s break down what’s going wrong and how to fix it.
 
 ---
 
-# 2. Distance Fields Should Probably Be Euclidean
+# 1. Why your mountains are on the coastline
 
-You currently compute distances using **BFS tile distance**. 
+This is the biggest tell.
 
-This produces Manhattan-style distance artifacts:
-
-```
-+++++
-+   +
-+   +
-+   +
-+++++
-```
-
-Instead of circular gradients you get diamond shapes.
-
-This affects:
-
-* soil fertility gradients
-* moisture modeling
-* vegetation zones
-
-### Better approach
-
-Use **Euclidean Distance Transform (EDT)**.
-
-Fast algorithms exist:
-
-* Felzenszwalb EDT
-* Jump Flooding
-* Multi-pass EDT
-
-Benefits:
-
-* smooth radial gradients
-* more natural ecological zones
-
----
-
-# 3. Soil Model Is Too Static
-
-Current soil fields:
+You’re probably doing something like:
 
 ```
-soil_fertility = noise + water_bonus - slope_penalty
-soil_hold = material_noise + lowland_bonus - steepness_penalty
+height = base_noise
+mountains = height > threshold
+water = height < sea_level
 ```
 
-This is fine for generation, but **soil should evolve** later.
+This means the **highest noise values randomly occur anywhere**, including coastlines.
 
-Future simulations will need:
+In real terrain, mountains occur because of **tectonic uplift**, not random elevation.
 
-```
-soil_depth
-organic_matter
-water_capacity
-nutrient_pool
-```
+### Fix
 
-These change due to:
-
-* erosion
-* plant decomposition
-* flooding
-* sediment deposition
-
-So consider restructuring now.
-
-### Suggested soil model
-
-```
-soil_depth
-organic_matter
-clay_fraction
-sand_fraction
-rock_fraction
-```
-
-From this derive:
-
-```
-fertility
-water_retention
-drainage
-```
-
-Much more flexible later.
-
----
-
-# 4. River System Missing (Important)
-
-You already have:
-
-```
-dist_water
-dist_ocean
-river_flow (stub)
-```
-
-Good placeholder.
-
-But rivers should come from **flow accumulation**.
-
-### Recommended algorithm
-
-1. Compute downhill direction from height.
-2. Accumulate flow:
-
-```
-flow[x] += upstream_flow
-```
-
-3. Threshold:
-
-```
-flow > river_threshold → river
-```
-
-This automatically produces:
-
-* realistic drainage basins
-* rivers that merge
-* natural river density
-
----
-
-# 5. Edge Falloff Produces Artificial Continents
-
-You use a **soft edge falloff to push borders toward ocean**. 
-
-This works visually but creates artifacts:
-
-* continents centered in map
-* coastlines parallel to borders
-* unrealistic plate shapes
-
-### Better alternatives
-
-**Option A — Wraparound world**
-
-Make map toroidal.
-
-No edges.
-
-**Option B — Radial continent mask**
-
-Use:
-
-```
-mask = distance_from_center
-```
-
-**Option C — Plate simulation (best but complex)**
-
-Generate continents from tectonic plates.
-
----
-
-# 6. Elevation Bands Are Too Discrete
-
-You have:
-
-```
-Lowland
-Hills
-Mountains
-```
-
-These categorical bands work for rendering but will cause issues for:
-
-* vegetation transitions
-* biome gradients
-* snowline
-* climate
-
-Instead treat bands as **derived categories**, not primary fields.
-
-Use continuous variables:
-
-```
-height
-slope
-temperature
-moisture
-```
-
-Then classify when rendering.
-
----
-
-# 7. Roughness Definition Could Be Improved
-
-You compute:
-
-```
-roughness = 0.6 * ridge + 0.4 * slope
-```
-
-But slope already contains ridge effects.
-
-This double counts mountains.
-
-Better metric:
-
-```
-roughness = local_height_variance
-```
-
-Compute over 3×3 or 5×5 neighborhood.
-
-This captures:
-
-* cliffs
-* ridges
-* rough terrain
-
----
-
-# 8. Lake Detection Is Good But Missing Outflows
-
-Your flood-fill classification is solid.
-
-But lakes should also check:
-
-```
-does lake have an outlet?
-```
-
-Otherwise lakes become permanent sinks.
-
-Realistic hydrology:
-
-```
-basin fills → spills → river forms
-```
-
-This produces natural drainage.
-
----
-
-# 9. Noise Layers Might Be Correlated
-
-You use several noise layers:
-
-* terrain detail
-* continental shape
-* coastline detail
-* lakes
-
-If they share seeds or frequency ratios, patterns may align.
-
-Better approach:
-
-Use **domain warping**.
+Mountains should be **distance from plate boundaries**, not noise.
 
 Example:
 
 ```
-warp_x = noise2(x,y)
-warp_y = noise3(x,y)
-
-height = noise(x + warp_x, y + warp_y)
+uplift = ridge_noise
+mountain_height = max(0, uplift - threshold)
+height += mountain_height
 ```
 
-This creates far more natural landforms.
-
----
-
-# 10. Good Design Choices You Should Keep
-
-Some things here are **excellent decisions**:
-
-### ✔ Deterministic seed generation
-
-Essential for debugging.
-
----
-
-### ✔ Clear pipeline stages
-
-Makes iteration easy.
-
----
-
-### ✔ Interactive sandbox viewer
-
-This is huge for worldgen tuning.
-
----
-
-### ✔ Telemetry and stats
-
-Worldgen without stats is painful.
-
----
-
-### ✔ Separation from main engine modules
-
-The sandbox approach is exactly right.
-
----
-
-# 11. One Missing Field That Will Matter Later
-
-Add **aspect (slope direction)**.
+But even better:
 
 ```
-aspect = atan2(dz/dy, dz/dx)
+plate_boundaries -> mountain chains
 ```
 
-This matters for:
-
-* snow melt
-* vegetation
-* sunlight
-* wind exposure
-
-South-facing slopes vs north-facing slopes behave differently.
+Mountains should appear as **long coherent ridges**, not scattered patches.
 
 ---
 
-# 12. Suggested Final Terrain Tile Model
+# 2. Why lakes are single pixels
 
-You might eventually want something like:
-
-```
-TerrainTile
-{
-    height
-    slope
-    aspect
-
-    soil_depth
-    soil_texture
-    organic_matter
-
-    surface_water
-    groundwater
-
-    dist_ocean
-    dist_river
-
-    flow_accumulation
-
-    roughness
-}
-```
-
-Then derive:
+Right now lakes are probably:
 
 ```
-biome
-fertility
-soil_hold
-bands
+if height < water_level:
+    water
+```
+
+But lakes should form where:
+
+```
+local basin AND not connected to ocean
+```
+
+### Fix: basin detection
+
+After generating terrain:
+
+```
+for each tile:
+    if lower than all neighbors:
+        basin
+```
+
+Then:
+
+```
+fill basin until overflow point
+```
+
+This produces **real lakes** instead of noise puddles.
+
+Also apply:
+
+```
+remove lakes smaller than N tiles
 ```
 
 ---
 
-# Final Verdict
+# 3. Why there are no islands / peninsulas
 
-Overall quality: **very good design**.
+Your landmass is likely generated by:
 
-The biggest improvements would be:
+```
+continent_noise > threshold
+```
 
-1. **Unify mountain ridges with height field**
-2. **Add river routing**
-3. **Switch BFS distances to Euclidean**
-4. **Use domain-warped noise**
-5. **Move toward dynamic soil model**
+This produces **blobs**, not interesting coastlines.
 
-Those changes will dramatically improve realism and make the system work much better once you add:
+### Fix: multi-scale continent generation
 
-* weather
-* vegetation
-* erosion
-* hydrology.
+Use **three scales**:
+
+```
+macro continents      (very low freq noise)
+regional landforms    (medium freq)
+coastal roughness     (high freq)
+```
+
+Example:
+
+```
+continent = fbm(noise, freq=0.005)
+regional  = fbm(noise, freq=0.02)
+coast     = fbm(noise, freq=0.08)
+
+height = continent*0.7 + regional*0.2 + coast*0.1
+```
+
+This produces:
+
+* islands
+* peninsulas
+* bays
+* archipelagos
 
 ---
+
+# 4. Why coastlines look artificial
+
+Your coast is probably:
+
+```
+height == sea_level boundary
+```
+
+Real coastlines have **erosion and shelves**.
+
+### Fix: coastal falloff
+
+```
+height -= distance_to_ocean * coastal_slope
+```
+
+Then add **coastal noise**.
+
+This produces:
+
+* beaches
+* cliffs
+* fjords
+
+---
+
+# 5. You need **river basins**
+
+Right now terrain has no **drainage network**, which is why it looks unnatural.
+
+Real terrain is structured by rivers.
+
+### River algorithm
+
+```
+for each high tile:
+    flow downhill
+    accumulate flow
+```
+
+Where flow accumulates above threshold:
+
+```
+river
+```
+
+Then apply **erosion**:
+
+```
+height -= river_strength * erosion_rate
+```
+
+This creates:
+
+* valleys
+* deltas
+* realistic lakes
+
+---
+
+# 6. Introduce **tectonic plates**
+
+Even a fake version improves realism massively.
+
+Algorithm:
+
+```
+generate ~8 plate centers
+voronoi partition world
+assign motion vectors
+```
+
+At boundaries:
+
+```
+convergent -> mountains
+divergent -> rifts
+transform -> fault valleys
+```
+
+This alone will fix the **coastal mountain problem**.
+
+---
+
+# 7. Your noise frequency is too high
+
+I see **grainy terrain texture** in your screenshots.
+
+That means the noise scale is too small relative to the map.
+
+For a **256x256 world**, continent noise should be extremely low frequency.
+
+Example:
+
+```
+continent_noise freq ≈ 1 / 300
+regional_noise  freq ≈ 1 / 80
+terrain_noise   freq ≈ 1 / 25
+```
+
+---
+
+# 8. Add **erosion simulation**
+
+Even a simple erosion pass improves terrain dramatically.
+
+### Cheap hydraulic erosion
+
+Repeat 20–50 iterations:
+
+```
+for tile:
+    slope = max_neighbor_height - height
+    sediment = slope * erosion_rate
+    move sediment downhill
+```
+
+This smooths noise and forms valleys.
+
+---
+
+# 9. Enforce ecological invariants
+
+You mentioned earlier you want **realistic simulation equilibria**.
+
+Add terrain invariants like:
+
+```
+mountains rarely within 5 tiles of ocean
+lakes > N tiles
+rivers start above elevation threshold
+islands size distribution power law
+```
+
+This prevents pathological worlds.
+
+---
+
+# 10. The minimal pipeline that works
+
+A good terrain generator pipeline is:
+
+```
+1. continents (very low frequency noise)
+
+2. tectonic uplift
+   -> mountain chains
+
+3. regional terrain noise
+
+4. hydraulic erosion
+
+5. drainage simulation
+   -> rivers + lakes
+
+6. coastal shaping
+```
+
+This is how games like:
+
+* RimWorld
+* Dwarf Fortress
+* Civ
+* Minecraft (post 1.18)
+
+structure their terrain.
+
+---
+
+# A trick that will immediately improve your worlds
+
+Add **distance from coast elevation bias**:
+
+```
+height += distance_from_ocean * 0.2
+```
+
+This alone will push mountains inland and fix the coastal ridge problem.
+
+---
+
+# If you'd like, I can also show you
+
+* **A 200-line terrain generator architecture** that produces:
+
+  * islands
+  * mountain ranges
+  * lakes
+  * rivers
+  * peninsulas
+  * inland seas
+* The **3 invariants that prevent ugly worlds**
+* The **erosion trick used in Valheim and Minecraft**
+
+Those will dramatically improve the terrain you're generating.

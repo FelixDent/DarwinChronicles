@@ -275,9 +275,9 @@ void SimState::generate_terrain() {
             auto& tile = tiles[y][x];
 
             // Elevation: preset base + gradient + noise
-            float gradient = (static_cast<float>(GRID_SIZE - 1 - y) +
-                              static_cast<float>(GRID_SIZE - 1 - x)) /
-                             static_cast<float>(GRID_SIZE * 2 - 2);  // 0..1, high at top-left
+            float gradient =
+                (static_cast<float>(GRID_SIZE - 1 - y) + static_cast<float>(GRID_SIZE - 1 - x)) /
+                static_cast<float>(GRID_SIZE * 2 - 2);  // 0..1, high at top-left
             float noise = (tile_hash(x, y, terrain_seed) - 0.5f) * 0.15f;
             tile.elev01 = std::clamp(preset.elev01 + (gradient - 0.5f) * 0.3f + noise, 0.0f, 1.0f);
 
@@ -285,13 +285,17 @@ void SimState::generate_terrain() {
             float max_diff = 0;
             for (int dy = -1; dy <= 1; ++dy) {
                 for (int dx = -1; dx <= 1; ++dx) {
-                    if (dx == 0 && dy == 0) continue;
+                    if (dx == 0 && dy == 0)
+                        continue;
                     int nx = x + dx, ny = y + dy;
-                    if (nx < 0 || nx >= GRID_SIZE || ny < 0 || ny >= GRID_SIZE) continue;
+                    if (nx < 0 || nx >= GRID_SIZE || ny < 0 || ny >= GRID_SIZE)
+                        continue;
                     float ne = preset.elev01 +
                                ((static_cast<float>(GRID_SIZE - 1 - ny) +
                                  static_cast<float>(GRID_SIZE - 1 - nx)) /
-                                static_cast<float>(GRID_SIZE * 2 - 2) - 0.5f) * 0.3f +
+                                    static_cast<float>(GRID_SIZE * 2 - 2) -
+                                0.5f) *
+                                   0.3f +
                                (tile_hash(nx, ny, terrain_seed) - 0.5f) * 0.15f;
                     max_diff = std::max(max_diff, std::abs(tile.elev01 - ne));
                 }
@@ -299,11 +303,10 @@ void SimState::generate_terrain() {
             tile.slope01 = std::clamp(preset.slope01 + max_diff * 2.0f, 0.0f, 1.0f);
 
             tile.soil_fertility = std::clamp(
-                preset.soil_fertility + (tile_hash(x, y, terrain_seed + 100) - 0.5f) * 0.15f,
-                0.0f, 1.0f);
+                preset.soil_fertility + (tile_hash(x, y, terrain_seed + 100) - 0.5f) * 0.15f, 0.0f,
+                1.0f);
             tile.soil_hold = std::clamp(
-                preset.soil_hold + (tile_hash(x, y, terrain_seed + 200) - 0.5f) * 0.1f,
-                0.1f, 1.0f);
+                preset.soil_hold + (tile_hash(x, y, terrain_seed + 200) - 0.5f) * 0.1f, 0.1f, 1.0f);
             tile.is_water = preset.is_water;
 
             // Temperature offset: lapse rate (−6.5°C per 1000m, scaled to 0..1 elev)
@@ -329,14 +332,18 @@ void SimState::generate_terrain() {
             float lowest = tile.elev01;
             for (int dy = -1; dy <= 1; ++dy) {
                 for (int dx = -1; dx <= 1; ++dx) {
-                    if (dx == 0 && dy == 0) continue;
+                    if (dx == 0 && dy == 0)
+                        continue;
                     int nx = x + dx, ny = y + dy;
-                    if (nx < 0 || nx >= GRID_SIZE || ny < 0 || ny >= GRID_SIZE) continue;
+                    if (nx < 0 || nx >= GRID_SIZE || ny < 0 || ny >= GRID_SIZE)
+                        continue;
                     // Use same formula as above to get neighbor elev before tiles array is filled
                     float ne = preset.elev01 +
                                ((static_cast<float>(GRID_SIZE - 1 - ny) +
                                  static_cast<float>(GRID_SIZE - 1 - nx)) /
-                                static_cast<float>(GRID_SIZE * 2 - 2) - 0.5f) * 0.3f +
+                                    static_cast<float>(GRID_SIZE * 2 - 2) -
+                                0.5f) *
+                                   0.3f +
                                (tile_hash(nx, ny, terrain_seed) - 0.5f) * 0.15f;
                     if (ne < lowest) {
                         lowest = ne;
@@ -406,7 +413,8 @@ void SimState::update_weather() {
 
             // Evap: driven by temperature, suppressed by humidity, reduced by canopy shade
             float humidity_suppression = 1.0f - tile.precipitation * 0.7f;
-            float shade_reduction = 1.0f - tile.canopy_cover * 0.4f;  // canopy reduces evap up to 40%
+            float shade_reduction =
+                1.0f - tile.canopy_cover * 0.4f;  // canopy reduces evap up to 40%
             tile.evap_demand = std::clamp(
                 0.02f * std::max(0.0f, tile.temperature) * humidity_suppression * shade_reduction,
                 0.0f, 1.0f);
@@ -767,96 +775,96 @@ void SimState::spawn_plants() {
                 continue;
 
             for (int attempt = 0; attempt < attempts_per_tile; ++attempt) {
+                int current = count_plants_on_tile(tx, ty);
+                // Soft cap: probability of establishment decreases as density approaches max
+                // At max, still 10% chance (allows slight overshoot then natural die-back)
+                float density_ratio =
+                    static_cast<float>(current) /
+                    std::max(static_cast<float>(preset.max_plants_per_tile), 1.0f);
+                float establish_prob = std::clamp(1.0f - density_ratio * 0.9f, 0.1f, 1.0f);
+                if (current >= preset.max_plants_per_tile * 2)
+                    break;  // hard cap at 2x to prevent runaway
+                if (unit(rng) > establish_prob)
+                    continue;
 
-            int current = count_plants_on_tile(tx, ty);
-            // Soft cap: probability of establishment decreases as density approaches max
-            // At max, still 10% chance (allows slight overshoot then natural die-back)
-            float density_ratio =
-                static_cast<float>(current) / std::max(static_cast<float>(preset.max_plants_per_tile), 1.0f);
-            float establish_prob = std::clamp(1.0f - density_ratio * 0.9f, 0.1f, 1.0f);
-            if (current >= preset.max_plants_per_tile * 2)
-                break;  // hard cap at 2x to prevent runaway
-            if (unit(rng) > establish_prob)
-                continue;
-
-            // Species selection: 60% dominant species, 40% from full weighted pool
-            PlantArchetype chosen;
-            if (unit(rng) < 0.60f) {
-                // Pick one of the two dominant species (60/40 split)
-                chosen = (unit(rng) < 0.6f) ? dominant_species[0] : dominant_species[1];
-            } else {
-                // Normal weighted selection from all archetypes
-                float roll = unit(rng) * total_weight;
-                float accum = 0;
-                chosen = PlantArchetype::Grass;
-                for (int i = 0; i < NUM_ARCHETYPES; ++i) {
-                    accum += preset.archetype_weights[i];
-                    if (roll <= accum) {
-                        chosen = static_cast<PlantArchetype>(i);
-                        break;
+                // Species selection: 60% dominant species, 40% from full weighted pool
+                PlantArchetype chosen;
+                if (unit(rng) < 0.60f) {
+                    // Pick one of the two dominant species (60/40 split)
+                    chosen = (unit(rng) < 0.6f) ? dominant_species[0] : dominant_species[1];
+                } else {
+                    // Normal weighted selection from all archetypes
+                    float roll = unit(rng) * total_weight;
+                    float accum = 0;
+                    chosen = PlantArchetype::Grass;
+                    for (int i = 0; i < NUM_ARCHETYPES; ++i) {
+                        accum += preset.archetype_weights[i];
+                        if (roll <= accum) {
+                            chosen = static_cast<PlantArchetype>(i);
+                            break;
+                        }
                     }
                 }
-            }
 
-            PlantTraits traits = generate_traits(chosen);
-            float suit = compute_suitability(traits, tile);
-            if (suit < 0.3f)
-                continue;
+                PlantTraits traits = generate_traits(chosen);
+                float suit = compute_suitability(traits, tile);
+                if (suit < 0.3f)
+                    continue;
 
-            // Neighborhood interaction based on cluster_affinity:
-            //   Gregarious species (affinity > 0): same-species neighbors help, others hurt
-            //   Territorial species (affinity < 0): ALL neighbors hurt, even same-species
-            float neighbor_effect = 0.0f;
-            for (const auto& p : plants) {
-                if (p.tile_x == tx && p.tile_y == ty && p.health != PlantHealth::Dead) {
-                    if (p.traits.archetype == chosen) {
-                        // Same species: gregarious → bonus, territorial → penalty
-                        // affinity  0.8 → -0.8 * 0.15 = -0.12 (bonus, lowers competition)
-                        // affinity -0.6 → +0.6 * 0.15 = +0.09 (penalty)
-                        neighbor_effect -= traits.cluster_affinity * 0.15f;
-                    } else {
-                        // Different species: always competition, scaled by how territorial
-                        // More territorial = stronger inter-species competition
-                        float territorial = std::max(0.0f, -traits.cluster_affinity);
-                        neighbor_effect += 0.1f + territorial * 0.15f;
+                // Neighborhood interaction based on cluster_affinity:
+                //   Gregarious species (affinity > 0): same-species neighbors help, others hurt
+                //   Territorial species (affinity < 0): ALL neighbors hurt, even same-species
+                float neighbor_effect = 0.0f;
+                for (const auto& p : plants) {
+                    if (p.tile_x == tx && p.tile_y == ty && p.health != PlantHealth::Dead) {
+                        if (p.traits.archetype == chosen) {
+                            // Same species: gregarious → bonus, territorial → penalty
+                            // affinity  0.8 → -0.8 * 0.15 = -0.12 (bonus, lowers competition)
+                            // affinity -0.6 → +0.6 * 0.15 = +0.09 (penalty)
+                            neighbor_effect -= traits.cluster_affinity * 0.15f;
+                        } else {
+                            // Different species: always competition, scaled by how territorial
+                            // More territorial = stronger inter-species competition
+                            float territorial = std::max(0.0f, -traits.cluster_affinity);
+                            neighbor_effect += 0.1f + territorial * 0.15f;
+                        }
                     }
                 }
-            }
-            // High competition makes it harder to establish
-            if (suit - neighbor_effect < 0.3f)
-                continue;
+                // High competition makes it harder to establish
+                if (suit - neighbor_effect < 0.3f)
+                    continue;
 
-            PlantInstance plant;
-            plant.traits = traits;
-            plant.tile_x = tx;
-            plant.tile_y = ty;
-            plant.offset_x = unit(rng) * 0.7f + 0.15f;  // 0.15..0.85
-            plant.offset_y = unit(rng) * 0.7f + 0.15f;
-            plant.water_reserve = tile.soil_moisture();
-            plant.max_age_days = generate_max_age(chosen);
+                PlantInstance plant;
+                plant.traits = traits;
+                plant.tile_x = tx;
+                plant.tile_y = ty;
+                plant.offset_x = unit(rng) * 0.7f + 0.15f;  // 0.15..0.85
+                plant.offset_y = unit(rng) * 0.7f + 0.15f;
+                plant.water_reserve = tile.soil_moisture();
+                plant.max_age_days = generate_max_age(chosen);
 
-            // Stagger initial biomass so plants don't all grow/die in sync.
-            // On first spawn (day 0), give varied starting biomass to simulate
-            // an established ecosystem. Later spawns start from scratch.
-            if (elapsed_days < 1.0f) {
-                // Slow growers (trees) should start more established:
-                // use max of 2 random rolls so distribution skews toward higher biomass
-                float r1 = unit(rng);
-                float r2 = unit(rng);
-                plant.biomass = std::max(r1, r2) * 0.85f + 0.1f;  // 0.10..0.95, skewed high
-                // Set age proportional to biomass / growth_speed
-                plant.age_days =
-                    plant.biomass / std::max(plant.traits.growth_speed, 0.0001f) * unit(rng);
-            }
-            // Update phase from initial biomass
-            if (plant.biomass >= 0.66f)
-                plant.phase = GrowthPhase::Large;
-            else if (plant.biomass >= 0.33f)
-                plant.phase = GrowthPhase::Medium;
+                // Stagger initial biomass so plants don't all grow/die in sync.
+                // On first spawn (day 0), give varied starting biomass to simulate
+                // an established ecosystem. Later spawns start from scratch.
+                if (elapsed_days < 1.0f) {
+                    // Slow growers (trees) should start more established:
+                    // use max of 2 random rolls so distribution skews toward higher biomass
+                    float r1 = unit(rng);
+                    float r2 = unit(rng);
+                    plant.biomass = std::max(r1, r2) * 0.85f + 0.1f;  // 0.10..0.95, skewed high
+                    // Set age proportional to biomass / growth_speed
+                    plant.age_days =
+                        plant.biomass / std::max(plant.traits.growth_speed, 0.0001f) * unit(rng);
+                }
+                // Update phase from initial biomass
+                if (plant.biomass >= 0.66f)
+                    plant.phase = GrowthPhase::Large;
+                else if (plant.biomass >= 0.33f)
+                    plant.phase = GrowthPhase::Medium;
 
-            plants.push_back(plant);
-            if (metrics)
-                metrics->on_birth(chosen);
+                plants.push_back(plant);
+                if (metrics)
+                    metrics->on_birth(chosen);
 
             }  // end attempt loop
         }
@@ -893,8 +901,8 @@ void SimState::reproduce_plants() {
         int ty = std::clamp(parent.tile_y + dy, 0, GRID_SIZE - 1);
 
         int current = count_plants_on_tile(tx, ty);
-        float density_ratio =
-            static_cast<float>(current) / std::max(static_cast<float>(preset.max_plants_per_tile), 1.0f);
+        float density_ratio = static_cast<float>(current) /
+                              std::max(static_cast<float>(preset.max_plants_per_tile), 1.0f);
         float establish_prob = std::clamp(1.0f - density_ratio * 0.9f, 0.1f, 1.0f);
         if (current >= preset.max_plants_per_tile * 2)
             continue;
@@ -964,8 +972,8 @@ void SimState::update_plants(float dt_days) {
         // Growth suppression: each neighbor reduces growth by ~15%
         float density_factor = 1.0f / (1.0f + static_cast<float>(neighbors) * 0.15f);
 
-        plant.biomass += plant.traits.growth_speed * suit * water_factor * density_factor * dt_days *
-                         (1.0f - plant.stress);
+        plant.biomass += plant.traits.growth_speed * suit * water_factor * density_factor *
+                         dt_days * (1.0f - plant.stress);
         plant.biomass = std::clamp(plant.biomass, 0.0f, 1.0f);
 
         // Update phase
@@ -1085,11 +1093,9 @@ void SimState::update_plants(float dt_days) {
     }
 
     // Remove dead plants past their timer
-    auto new_end = std::remove_if(plants.begin(), plants.end(),
-                                  [](const PlantInstance& p) {
-                                      return p.health == PlantHealth::Dead &&
-                                             p.dead_timer >= DEAD_REMOVAL_DAYS;
-                                  });
+    auto new_end = std::remove_if(plants.begin(), plants.end(), [](const PlantInstance& p) {
+        return p.health == PlantHealth::Dead && p.dead_timer >= DEAD_REMOVAL_DAYS;
+    });
     int removed = static_cast<int>(plants.end() - new_end);
     plants.erase(new_end, plants.end());
     if (metrics) {

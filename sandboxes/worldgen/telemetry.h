@@ -18,12 +18,10 @@ enum class OverlayMode {
     Slope,
     ElevBand,
     DistOcean,
-    DistWater,
-    SoilFertility,
-    SoilHold,
     Roughness,
     Aspect,
-    RiverFlow,
+    Geology,
+    SoilTexture,
 
     COUNT
 };
@@ -36,27 +34,28 @@ SDL_Color continental_color(float h);
 SDL_Color slope_color(float s);
 SDL_Color elevband_color(ElevBand band);
 SDL_Color dist_color(float dist, float max_dist);
-SDL_Color soil_color(float v);
 SDL_Color aspect_color(float aspect);
-SDL_Color river_flow_color(float flow, float max_flow);
+SDL_Color geology_color(RockType rock);
+SDL_Color soil_texture_color(SoilTexture soil);
 
 // ── Terrain statistics ──────────────────────────────────────────────────────
 
 struct TerrainStats {
     uint32_t total_tiles = 0;
     uint32_t ocean_tiles = 0;
-    uint32_t lake_tiles = 0;
     uint32_t land_tiles = 0;
     std::array<uint32_t, 4> band_counts{};  // Water, Lowland, Hills, Mountains
 
     float height_min = 0.0f, height_max = 0.0f, height_mean = 0.0f, height_stddev = 0.0f;
     float slope_min = 0.0f, slope_max = 0.0f, slope_mean = 0.0f, slope_stddev = 0.0f;
     float dist_ocean_max = 0.0f;
-    float dist_water_max = 0.0f;
-    float fertility_min = 0.0f, fertility_max = 0.0f, fertility_mean = 0.0f;
-    float hold_min = 0.0f, hold_max = 0.0f, hold_mean = 0.0f;
     float roughness_min = 0.0f, roughness_max = 0.0f, roughness_mean = 0.0f;
-    float river_flow_max = 0.0f;
+
+    // Geology stats
+    std::array<uint32_t, 6> rock_counts{};  // Granite..Metamorphic
+    std::array<uint32_t, 5> soil_counts{};  // Sand..Peat
+    float hardness_mean = 0.0f;
+    float soil_depth_mean = 0.0f;
 };
 
 TerrainStats compute_stats(const Terrain& world);

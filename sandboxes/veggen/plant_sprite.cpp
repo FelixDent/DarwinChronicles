@@ -98,10 +98,14 @@ Vec2 vec2_rotate(Vec2 dir, float angle_rad) {
 
 int shade_index(float light) {
     // Clean banding — no per-pixel dithering noise
-    if (light < 0.25f) return 0;
-    if (light < 0.42f) return 1;
-    if (light < 0.60f) return 2;
-    if (light < 0.80f) return 3;
+    if (light < 0.25f)
+        return 0;
+    if (light < 0.42f)
+        return 1;
+    if (light < 0.60f)
+        return 2;
+    if (light < 0.80f)
+        return 3;
     return 4;
 }
 
@@ -165,12 +169,9 @@ uint32_t hue_to_leaf_rgb(int hue_byte, int leafiness) {
         float r, g, b;
     };
     static const Anchor anchors[] = {
-        {0.00f, 170.0f, 150.0f, 45.0f},
-        {0.18f, 135.0f, 140.0f, 35.0f},
-        {0.30f, 28.0f, 110.0f, 20.0f},
-        {0.40f, 48.0f, 145.0f, 32.0f},
-        {0.52f, 20.0f, 62.0f, 38.0f},
-        {0.65f, 72.0f, 98.0f, 58.0f},
+        {0.00f, 170.0f, 150.0f, 45.0f}, {0.18f, 135.0f, 140.0f, 35.0f},
+        {0.30f, 28.0f, 110.0f, 20.0f},  {0.40f, 48.0f, 145.0f, 32.0f},
+        {0.52f, 20.0f, 62.0f, 38.0f},   {0.65f, 72.0f, 98.0f, 58.0f},
         {1.00f, 85.0f, 108.0f, 78.0f},
     };
     constexpr int N = 7;
@@ -196,8 +197,7 @@ uint32_t hue_to_leaf_rgb(int hue_byte, int leafiness) {
     return rgba(static_cast<uint8_t>(r), static_cast<uint8_t>(g), static_cast<uint8_t>(b));
 }
 
-Palette make_palette(const PlantTraits& traits, std::mt19937& rng,
-                     float color_warmth = 0.0f) {
+Palette make_palette(const PlantTraits& traits, std::mt19937& rng, float color_warmth = 0.0f) {
     Palette p{};
 
     std::uniform_int_distribution<int> shift(-5, 5);
@@ -246,8 +246,10 @@ Palette make_palette(const PlantTraits& traits, std::mt19937& rng,
         case PlantArchetype::Shrub:
             if (roll(rng) < 40) {
                 static const uint32_t colors[] = {
-                    rgba(220, 180, 200), rgba(240, 240, 220),
-                    rgba(240, 220, 100), rgba(200, 140, 200),
+                    rgba(220, 180, 200),
+                    rgba(240, 240, 220),
+                    rgba(240, 220, 100),
+                    rgba(200, 140, 200),
                 };
                 p.accent = colors[roll(rng) % 4];
                 p.accent_dark = shift_color(p.accent, 0.65f, -0.2f);
@@ -257,7 +259,9 @@ Palette make_palette(const PlantTraits& traits, std::mt19937& rng,
         case PlantArchetype::BroadleafTree:
             if (roll(rng) < 40) {
                 static const uint32_t colors[] = {
-                    rgba(160, 70, 55), rgba(175, 130, 45), rgba(145, 50, 60),
+                    rgba(160, 70, 55),
+                    rgba(175, 130, 45),
+                    rgba(145, 50, 60),
                 };
                 p.accent = colors[roll(rng) % 3];
                 p.accent_dark = shift_color(p.accent, 0.65f, -0.2f);
@@ -267,7 +271,9 @@ Palette make_palette(const PlantTraits& traits, std::mt19937& rng,
         case PlantArchetype::Succulent:
             if (roll(rng) < 30) {
                 static const uint32_t colors[] = {
-                    rgba(230, 100, 120), rgba(230, 60, 60), rgba(240, 230, 80),
+                    rgba(230, 100, 120),
+                    rgba(230, 60, 60),
+                    rgba(240, 230, 80),
                 };
                 p.accent = colors[roll(rng) % 3];
                 p.accent_dark = shift_color(p.accent, 0.65f, -0.2f);
@@ -426,10 +432,10 @@ void get_canvas_size(PlantArchetype arch, GrowthPhase phase, int& w, int& h) {
 // ── Plant graph structures ───────────────────────────────────────────────────
 
 struct Segment {
-    int parent;    // -1 for root
-    Vec2 p0, p1;   // start/end in sprite coords
-    float r0, r1;  // radius at p0/p1
-    uint8_t order; // 0=trunk, 1=branch, 2=twig
+    int parent;     // -1 for root
+    Vec2 p0, p1;    // start/end in sprite coords
+    float r0, r1;   // radius at p0/p1
+    uint8_t order;  // 0=trunk, 1=branch, 2=twig
 };
 
 enum class StampKind : uint8_t { LeafBlob, NeedleLayer, FlowerDot };
@@ -444,10 +450,10 @@ struct FoliageStamp {
 // Frond: a curved leaf arc drawn as continuous leaf pixels with feather leaflets.
 // Used for palm fronds — these are leaves, not wood.
 struct FrondSpec {
-    Vec2 base;      // attachment point (crown)
-    Vec2 tip;       // endpoint before curvature
-    float width;    // max leaflet half-width at widest point
-    float curve;    // curvature: positive = droop further along length
+    Vec2 base;    // attachment point (crown)
+    Vec2 tip;     // endpoint before curvature
+    float width;  // max leaflet half-width at widest point
+    float curve;  // curvature: positive = droop further along length
     uint32_t seed;
 };
 
@@ -478,8 +484,8 @@ struct TrunkResult {
     Vec2 top;
 };
 
-TrunkResult gen_curved_trunk(PlantGraph& g, Vec2 base, float height, float r0, float r1,
-                             int n_pts, float max_drift, std::mt19937& rng) {
+TrunkResult gen_curved_trunk(PlantGraph& g, Vec2 base, float height, float r0, float r1, int n_pts,
+                             float max_drift, std::mt19937& rng) {
     std::uniform_real_distribution<float> drift(-max_drift, max_drift);
 
     // Item 8: slight consistent trunk tilt (-3° to +3°)
@@ -505,8 +511,8 @@ TrunkResult gen_curved_trunk(PlantGraph& g, Vec2 base, float height, float r0, f
         float seg_r0 = r0 + (r1 - r0) * t0;
         float seg_r1 = r0 + (r1 - r0) * t1;
         int parent = (i == 0) ? -1 : prev_seg;
-        g.segs.push_back({parent, pts[static_cast<size_t>(i)],
-                          pts[static_cast<size_t>(i + 1)], seg_r0, seg_r1, 0});
+        g.segs.push_back({parent, pts[static_cast<size_t>(i)], pts[static_cast<size_t>(i + 1)],
+                          seg_r0, seg_r1, 0});
         prev_seg = static_cast<int>(g.segs.size()) - 1;
     }
 
@@ -559,8 +565,8 @@ void rasterize_segment(Sprite& s, MatBuf& mat, const Segment& seg, const Palette
 
             float closest_x = seg.p0.x + dx * t;
             float closest_y = seg.p0.y + dy * t;
-            float dist_sq = (ppx - closest_x) * (ppx - closest_x) +
-                            (ppy - closest_y) * (ppy - closest_y);
+            float dist_sq =
+                (ppx - closest_x) * (ppx - closest_x) + (ppy - closest_y) * (ppy - closest_y);
 
             float radius = seg.r0 + (seg.r1 - seg.r0) * t;
             if (dist_sq <= radius * radius) {
@@ -596,8 +602,7 @@ struct ClusterShape {
 static constexpr ClusterShape CLUSTER_2X2 = {{{0, 0}, {1, 0}, {0, 1}, {1, 1}}, 4};
 
 // 3x3 rounded blob (no corners)
-static constexpr ClusterShape CLUSTER_3X3_ROUND = {
-    {{0, -1}, {-1, 0}, {0, 0}, {1, 0}, {0, 1}}, 5};
+static constexpr ClusterShape CLUSTER_3X3_ROUND = {{{0, -1}, {-1, 0}, {0, 0}, {1, 0}, {0, 1}}, 5};
 
 // 3x3 diamond
 static constexpr ClusterShape CLUSTER_DIAMOND = {
@@ -608,15 +613,15 @@ static constexpr ClusterShape CLUSTER_3X3_FULL = {
     {{-1, -1}, {0, -1}, {1, -1}, {-1, 0}, {0, 0}, {1, 0}, {-1, 1}, {0, 1}, {1, 1}}, 9};
 
 // 3x2 wide (for needles)
-static constexpr ClusterShape CLUSTER_WIDE = {
-    {{-1, 0}, {0, 0}, {1, 0}, {-1, 1}, {0, 1}, {1, 1}}, 6};
+static constexpr ClusterShape CLUSTER_WIDE = {{{-1, 0}, {0, 0}, {1, 0}, {-1, 1}, {0, 1}, {1, 1}},
+                                              6};
 
 // 4x2 wide strip (for needles)
 static constexpr ClusterShape CLUSTER_STRIP = {
     {{-1, 0}, {0, 0}, {1, 0}, {2, 0}, {-1, 1}, {0, 1}, {1, 1}, {2, 1}}, 8};
 
-static const ClusterShape* LEAF_CLUSTERS[] = {
-    &CLUSTER_2X2, &CLUSTER_3X3_ROUND, &CLUSTER_DIAMOND, &CLUSTER_3X3_FULL};
+static const ClusterShape* LEAF_CLUSTERS[] = {&CLUSTER_2X2, &CLUSTER_3X3_ROUND, &CLUSTER_DIAMOND,
+                                              &CLUSTER_3X3_FULL};
 static constexpr int NUM_LEAF_CLUSTERS = 4;
 
 static const ClusterShape* NEEDLE_CLUSTERS[] = {&CLUSTER_WIDE, &CLUSTER_STRIP, &CLUSTER_2X2};
@@ -660,7 +665,7 @@ void stamp_leaf_blob(Sprite& s, MatBuf& mat, float cx, float cy, float rx, float
         for (int gx = min_x; gx <= max_x; gx += STEP) {
             // Noise offset per cluster position (item 3: organic irregularity)
             uint32_t nh = pixel_hash(gx, gy, seed + 33);
-            int nox = static_cast<int>(nh & 3) - 1;          // -1 to +2
+            int nox = static_cast<int>(nh & 3) - 1;  // -1 to +2
             int noy = static_cast<int>((nh >> 2) & 3) - 1;
 
             float fdx = (static_cast<float>(gx + nox) - cx) / std::max(rx, 0.5f);
@@ -781,11 +786,11 @@ void stamp_frond(Sprite& s, MatBuf& mat, const FrondSpec& frond, const Palette& 
         // Leaflet width: widest at 20-60% of frond length, taper at base and tip
         float width_t;
         if (t < 0.15f)
-            width_t = t / 0.15f;         // ramp up from base
+            width_t = t / 0.15f;  // ramp up from base
         else if (t > 0.7f)
-            width_t = (1.0f - t) / 0.3f; // taper to tip
+            width_t = (1.0f - t) / 0.3f;  // taper to tip
         else
-            width_t = 1.0f;              // full width in middle
+            width_t = 1.0f;  // full width in middle
         float leaflet_w = frond.width * width_t;
 
         if (leaflet_w < 0.5f)
@@ -812,10 +817,8 @@ void stamp_frond(Sprite& s, MatBuf& mat, const FrondSpec& frond, const Palette& 
             for (int li = 1; li <= leaflet_len; ++li) {
                 float lf = static_cast<float>(li);
                 // Leaflets angle slightly toward tip (not perfectly perpendicular)
-                float px = cx + perp_x * lf * static_cast<float>(side)
-                           + local_dir.x * lf * 0.15f;
-                float py = cy + perp_y * lf * static_cast<float>(side)
-                           + local_dir.y * lf * 0.15f;
+                float px = cx + perp_x * lf * static_cast<float>(side) + local_dir.x * lf * 0.15f;
+                float py = cy + perp_y * lf * static_cast<float>(side) + local_dir.y * lf * 0.15f;
                 // Small jitter for organic feel
                 px += jitter(frond_rng) * 0.4f;
                 py += jitter(frond_rng) * 0.4f;
@@ -827,8 +830,8 @@ void stamp_frond(Sprite& s, MatBuf& mat, const FrondSpec& frond, const Palette& 
                     continue;
 
                 // Shade: outer leaflets lighter (catching more light)
-                float leaf_light = 0.3f + 0.5f * (static_cast<float>(li) /
-                                   static_cast<float>(leaflet_len));
+                float leaf_light =
+                    0.3f + 0.5f * (static_cast<float>(li) / static_cast<float>(leaflet_len));
                 // Upper fronds lighter, lower fronds darker
                 leaf_light += (1.0f - t) * 0.15f;
                 int li_shade = shade_index(leaf_light);
@@ -842,8 +845,8 @@ void stamp_frond(Sprite& s, MatBuf& mat, const FrondSpec& frond, const Palette& 
 
 // Rendering mode for rasterize_graph
 enum class GraphRenderMode {
-    Normal,       // branches preserve under foliage
-    TrunkOnTop,   // foliage overwrites branches; trunk redrawn on top
+    Normal,      // branches preserve under foliage
+    TrunkOnTop,  // foliage overwrites branches; trunk redrawn on top
 };
 
 void rasterize_graph(Sprite& s, MatBuf& mat, const PlantGraph& graph, const Palette& pal,
@@ -966,8 +969,7 @@ void draw_ground_shadow(Sprite& s, MatBuf& mat, int cx, int cy, int rx, int ry) 
             float fdy = static_cast<float>(py - cy) / std::max(static_cast<float>(ry), 0.5f);
             if (fdx * fdx + fdy * fdy <= 1.0f) {
                 // Only draw shadow on empty pixels
-                if (px >= 0 && px < s.w && py >= 0 && py < s.h &&
-                    mat.get(px, py) == Mat::Empty) {
+                if (px >= 0 && px < s.w && py >= 0 && py < s.h && mat.get(px, py) == Mat::Empty) {
                     uint8_t alpha = 20;
                     set_pixel(s, px, py, rgba(0, 0, 0, alpha));
                     mat.set(px, py, Mat::Shadow);
@@ -985,8 +987,8 @@ bool in_envelope_ellipse(float px, float py, float cx, float cy, float rx, float
     return dx * dx + dy * dy <= 1.0f;
 }
 
-[[maybe_unused]] bool in_envelope_triangle(float px, float py, float apex_x, float apex_y, float base_y,
-                          float base_half_w) {
+[[maybe_unused]] bool in_envelope_triangle(float px, float py, float apex_x, float apex_y,
+                                           float base_y, float base_half_w) {
     if (py < apex_y || py > base_y)
         return false;
     float t = (py - apex_y) / std::max(base_y - apex_y, 0.1f);
@@ -999,14 +1001,14 @@ bool in_envelope_ellipse(float px, float py, float cx, float cy, float rx, float
 // visual knobs driven by ecological properties — not just leafiness/branchiness.
 
 struct VisualParams {
-    float leaf_density;    // 0..1  how filled the canopy is
-    float canopy_spread;   // 0..1  how wide relative to height
-    float trunk_thickness; // 0.5..1.5  multiplier on base trunk radius
-    float branch_droop;    // 0..1  gravitropism intensity
-    float branch_spread;   // 0..1  how wide branches angle out
-    float compactness;     // 0..1  1=tight crown, 0=loose open
-    float color_warmth;    // -1..1  shifts palette: -1=blue-cool, +1=yellow-warm
-    float foliage_top_bias;// 0..1  1=leaves only at top (palm), 0=evenly distributed
+    float leaf_density;      // 0..1  how filled the canopy is
+    float canopy_spread;     // 0..1  how wide relative to height
+    float trunk_thickness;   // 0.5..1.5  multiplier on base trunk radius
+    float branch_droop;      // 0..1  gravitropism intensity
+    float branch_spread;     // 0..1  how wide branches angle out
+    float compactness;       // 0..1  1=tight crown, 0=loose open
+    float color_warmth;      // -1..1  shifts palette: -1=blue-cool, +1=yellow-warm
+    float foliage_top_bias;  // 0..1  1=leaves only at top (palm), 0=evenly distributed
 };
 
 VisualParams derive_visual_params(const PlantTraits& t) {
@@ -1033,12 +1035,12 @@ VisualParams derive_visual_params(const PlantTraits& t) {
 
     // Cold-adapted or drought-tolerant = compact crown
     float cold = std::clamp((10.0f - t.temp_opt_c) / 20.0f, 0.0f, 1.0f);
-    v.compactness = std::clamp(cold * 0.4f + t.drought_tol * 0.3f + (1.0f - branch_f) * 0.3f,
-                               0.0f, 1.0f);
+    v.compactness =
+        std::clamp(cold * 0.4f + t.drought_tol * 0.3f + (1.0f - branch_f) * 0.3f, 0.0f, 1.0f);
 
     // Color warmth: drought shifts yellow-warm; cold shifts blue-cool
-    v.color_warmth = std::clamp(t.drought_tol * 0.8f - cold * 0.6f - moisture_factor * 0.3f,
-                                -1.0f, 1.0f);
+    v.color_warmth =
+        std::clamp(t.drought_tol * 0.8f - cold * 0.6f - moisture_factor * 0.3f, -1.0f, 1.0f);
 
     // Foliage top bias: archetype-driven, then modulated by ecology
     // Palm = 1.0 (all at top), TropicalTree = 0.7 (dense crown), Conifer handled separately
@@ -1089,15 +1091,14 @@ PlantGraph gen_broadleaf_graph(const PlantTraits& traits, GrowthPhase phase, int
     int n_trunk_pts = (phase == GrowthPhase::Small) ? 2 : 4;
     float max_drift = 2.0f * ff;
     int first_trunk = static_cast<int>(g.segs.size());
-    auto trunk = gen_curved_trunk(g, trunk_base, trunk_h, trunk_r0, trunk_r1,
-                                  n_trunk_pts, max_drift, rng);
+    auto trunk =
+        gen_curved_trunk(g, trunk_base, trunk_h, trunk_r0, trunk_r1, n_trunk_pts, max_drift, rng);
     int num_trunk_segs = n_trunk_pts - 1;
     Vec2 trunk_top = trunk.top;
 
     if (phase == GrowthPhase::Small) {
-        g.stamps.push_back(
-            {trunk_top, std::max(2.0f, 3.0f * ff), std::max(2.0f, 3.0f * ff), StampKind::LeafBlob,
-             traits.sprite_seed});
+        g.stamps.push_back({trunk_top, std::max(2.0f, 3.0f * ff), std::max(2.0f, 3.0f * ff),
+                            StampKind::LeafBlob, traits.sprite_seed});
         return g;
     }
 
@@ -1204,11 +1205,10 @@ PlantGraph gen_broadleaf_graph(const PlantTraits& traits, GrowthPhase phase, int
             g.segs.push_back({seg_id, twig_start, twig_end, twig_r0, twig_r1, 2});
 
             float twig_r = cluster_r * 0.7f;
-            if (in_envelope_ellipse(twig_end.x, twig_end.y, env_cx, env_cy,
-                                    env_rx * 1.1f, env_ry * 1.1f)) {
-                g.stamps.push_back(
-                    {twig_end, twig_r, twig_r * 0.85f, StampKind::LeafBlob,
-                     traits.sprite_seed + static_cast<uint32_t>(i * 31 + 100)});
+            if (in_envelope_ellipse(twig_end.x, twig_end.y, env_cx, env_cy, env_rx * 1.1f,
+                                    env_ry * 1.1f)) {
+                g.stamps.push_back({twig_end, twig_r, twig_r * 0.85f, StampKind::LeafBlob,
+                                    traits.sprite_seed + static_cast<uint32_t>(i * 31 + 100)});
                 leaf_positions.push_back(twig_end);
             }
         }
@@ -1277,14 +1277,13 @@ PlantGraph gen_conifer_graph(const PlantTraits& traits, GrowthPhase phase, int w
     int n_trunk_pts = (phase == GrowthPhase::Small) ? 2 : 5;
     float max_drift = 0.8f * ff;  // conifers are straighter than broadleaf
     int first_trunk = static_cast<int>(g.segs.size());
-    auto trunk = gen_curved_trunk(g, trunk_base, trunk_h, trunk_r0, trunk_r1,
-                                  n_trunk_pts, max_drift, rng);
+    auto trunk =
+        gen_curved_trunk(g, trunk_base, trunk_h, trunk_r0, trunk_r1, n_trunk_pts, max_drift, rng);
     int num_trunk_segs = n_trunk_pts - 1;
     Vec2 trunk_top = trunk.top;
 
     if (phase == GrowthPhase::Small) {
-        g.stamps.push_back(
-            {trunk_top, 2.0f, 3.0f, StampKind::NeedleLayer, traits.sprite_seed});
+        g.stamps.push_back({trunk_top, 2.0f, 3.0f, StampKind::NeedleLayer, traits.sprite_seed});
         return g;
     }
 
@@ -1364,8 +1363,7 @@ PlantGraph gen_conifer_graph(const PlantTraits& traits, GrowthPhase phase, int w
             Vec2 mid_pt = trunk_point_at(g, first_trunk, num_trunk_segs, mid_t);
             float mid_hw = branch_len * 0.6f;
             float mid_hh = tier_height_px * 0.5f;
-            g.stamps.push_back({mid_pt, mid_hw, std::max(mid_hh, 2.0f),
-                                StampKind::NeedleLayer,
+            g.stamps.push_back({mid_pt, mid_hw, std::max(mid_hh, 2.0f), StampKind::NeedleLayer,
                                 traits.sprite_seed + static_cast<uint32_t>(ti * 13 + 500)});
         }
     }
@@ -1376,7 +1374,8 @@ PlantGraph gen_conifer_graph(const PlantTraits& traits, GrowthPhase phase, int w
         float apex_y = trunk_top.y;
         float base_y = trunk_base.y - trunk_h * (1.0f - canopy_start);
         float env_height = base_y - apex_y;
-        if (env_height < 1.0f) env_height = 1.0f;
+        if (env_height < 1.0f)
+            env_height = 1.0f;
 
         int n_scatter = 6 + static_cast<int>(ff * 8.0f);
         float min_dist = 4.0f;
@@ -1408,8 +1407,7 @@ PlantGraph gen_conifer_graph(const PlantTraits& traits, GrowthPhase phase, int w
             float stamp_hh = (2.0f + unit(rng) * 2.0f) * ff * size_scale;
             stamp_hw = std::max(stamp_hw, 2.0f);
             stamp_hh = std::max(stamp_hh, 1.5f);
-            g.stamps.push_back({Vec2{fx, fy}, stamp_hw, stamp_hh,
-                                StampKind::NeedleLayer,
+            g.stamps.push_back({Vec2{fx, fy}, stamp_hw, stamp_hh, StampKind::NeedleLayer,
                                 traits.sprite_seed + static_cast<uint32_t>(attempts * 17 + 700)});
         }
     }
@@ -1418,15 +1416,14 @@ PlantGraph gen_conifer_graph(const PlantTraits& traits, GrowthPhase phase, int w
     float upper_y = trunk_point_at(g, first_trunk, num_trunk_segs, 0.75f).y;
     float upper_hw = base_half_w * ff * 0.35f;
     float upper_hh = trunk_h * 0.20f;
-    g.stamps.push_back(
-        {Vec2{trunk_top.x, upper_y}, upper_hw, upper_hh,
-         StampKind::NeedleLayer, traits.sprite_seed + 998});
+    g.stamps.push_back({Vec2{trunk_top.x, upper_y}, upper_hw, upper_hh, StampKind::NeedleLayer,
+                        traits.sprite_seed + 998});
 
     // Crown tip
     float tip_h = trunk_h * tier_spacing + 3.0f;
-    g.stamps.push_back(
-        {Vec2{trunk_top.x, trunk_top.y + 2.0f}, 3.5f * ff,
-         std::max(tip_h * ff, 4.5f * ff), StampKind::NeedleLayer, traits.sprite_seed + 999});
+    g.stamps.push_back({Vec2{trunk_top.x, trunk_top.y + 2.0f}, 3.5f * ff,
+                        std::max(tip_h * ff, 4.5f * ff), StampKind::NeedleLayer,
+                        traits.sprite_seed + 999});
 
     // Triangular envelope — clips ragged edges to a clean conifer profile
     // Bushier species (high leaf_density, canopy_spread) get undulating edges
@@ -1460,13 +1457,12 @@ PlantGraph gen_shrub_graph(const PlantTraits& traits, GrowthPhase phase, int w, 
 
     int n_trunk_pts = (phase == GrowthPhase::Small) ? 2 : 3;
     float max_drift = 1.0f * ff;
-    auto trunk = gen_curved_trunk(g, trunk_base, trunk_h, trunk_r0, trunk_r1,
-                                  n_trunk_pts, max_drift, rng);
+    auto trunk =
+        gen_curved_trunk(g, trunk_base, trunk_h, trunk_r0, trunk_r1, n_trunk_pts, max_drift, rng);
     Vec2 trunk_top = trunk.top;
 
     if (phase == GrowthPhase::Small) {
-        g.stamps.push_back(
-            {trunk_top, 2.5f, 2.0f, StampKind::LeafBlob, traits.sprite_seed});
+        g.stamps.push_back({trunk_top, 2.5f, 2.0f, StampKind::LeafBlob, traits.sprite_seed});
         return g;
     }
 
@@ -1531,9 +1527,8 @@ PlantGraph gen_shrub_graph(const PlantTraits& traits, GrowthPhase phase, int w, 
     }
 
     // Central dome
-    g.stamps.push_back(
-        {Vec2{cx, env_cy}, canopy_rx * 0.8f, canopy_ry * 0.7f, StampKind::LeafBlob,
-         traits.sprite_seed + 888});
+    g.stamps.push_back({Vec2{cx, env_cy}, canopy_rx * 0.8f, canopy_ry * 0.7f, StampKind::LeafBlob,
+                        traits.sprite_seed + 888});
 
     // Flowers — shrubs are often flowering
     int n_flowers = 4 + static_cast<int>(vp.leaf_density * 4.0f);
@@ -1567,8 +1562,8 @@ PlantGraph gen_palm_graph(const PlantTraits& traits, GrowthPhase phase, int w, i
 
     int n_trunk_pts = (phase == GrowthPhase::Small) ? 2 : 5;
     float max_drift = 2.5f * ff;  // palms can lean more than other trees
-    auto trunk = gen_curved_trunk(g, trunk_base, trunk_h, trunk_r0, trunk_r1,
-                                  n_trunk_pts, max_drift, rng);
+    auto trunk =
+        gen_curved_trunk(g, trunk_base, trunk_h, trunk_r0, trunk_r1, n_trunk_pts, max_drift, rng);
     Vec2 trunk_top = trunk.top;
 
     if (phase == GrowthPhase::Small) {
@@ -1580,8 +1575,8 @@ PlantGraph gen_palm_graph(const PlantTraits& traits, GrowthPhase phase, int w, i
             Vec2 tip = {trunk_top.x + dir.x * len, trunk_top.y + dir.y * len};
             tip.x = std::clamp(tip.x, 1.0f, static_cast<float>(w) - 2.0f);
             tip.y = std::clamp(tip.y, 1.0f, static_cast<float>(h) - 2.0f);
-            g.fronds.push_back({trunk_top, tip, 1.5f, 0.15f,
-                                traits.sprite_seed + static_cast<uint32_t>(i * 13)});
+            g.fronds.push_back(
+                {trunk_top, tip, 1.5f, 0.15f, traits.sprite_seed + static_cast<uint32_t>(i * 13)});
         }
         return g;
     }
@@ -1612,8 +1607,7 @@ PlantGraph gen_palm_graph(const PlantTraits& traits, GrowthPhase phase, int w, i
         float this_len = frond_len * (0.75f + unit(rng) * 0.25f);
         this_len *= (1.0f - center_d * 0.25f);
 
-        Vec2 tip = {trunk_top.x + dir.x * this_len,
-                    trunk_top.y + dir.y * this_len};
+        Vec2 tip = {trunk_top.x + dir.x * this_len, trunk_top.y + dir.y * this_len};
         tip.x = std::clamp(tip.x, 1.0f, static_cast<float>(w) - 2.0f);
         tip.y = std::clamp(tip.y, 1.0f, static_cast<float>(h) - 2.0f);
 
@@ -1646,7 +1640,7 @@ PlantGraph gen_palm_graph(const PlantTraits& traits, GrowthPhase phase, int w, i
 // with dense foliage concentrated in the upper crown. Emergent crown shape.
 
 PlantGraph gen_tropical_graph(const PlantTraits& traits, GrowthPhase phase, int w, int h,
-                               std::mt19937& rng, const VisualParams& vp) {
+                              std::mt19937& rng, const VisualParams& vp) {
     PlantGraph g;
     float ff = foliage_fraction(phase);
     float cx = static_cast<float>(w) / 2.0f;
@@ -1666,8 +1660,8 @@ PlantGraph gen_tropical_graph(const PlantTraits& traits, GrowthPhase phase, int 
     int n_trunk_pts = (phase == GrowthPhase::Small) ? 2 : 4;
     float max_drift = 1.0f * ff;  // tropical trees grow straighter than temperate
     int first_trunk = static_cast<int>(g.segs.size());
-    auto trunk = gen_curved_trunk(g, trunk_base, trunk_h, trunk_r0, trunk_r1,
-                                  n_trunk_pts, max_drift, rng);
+    auto trunk =
+        gen_curved_trunk(g, trunk_base, trunk_h, trunk_r0, trunk_r1, n_trunk_pts, max_drift, rng);
     int num_trunk_segs = n_trunk_pts - 1;
     Vec2 trunk_top = trunk.top;
 
@@ -1684,9 +1678,8 @@ PlantGraph gen_tropical_graph(const PlantTraits& traits, GrowthPhase phase, int 
     }
 
     if (phase == GrowthPhase::Small) {
-        g.stamps.push_back(
-            {trunk_top, std::max(3.0f, 4.0f * ff), std::max(2.5f, 3.0f * ff),
-             StampKind::LeafBlob, traits.sprite_seed});
+        g.stamps.push_back({trunk_top, std::max(3.0f, 4.0f * ff), std::max(2.5f, 3.0f * ff),
+                            StampKind::LeafBlob, traits.sprite_seed});
         return g;
     }
 
@@ -1746,8 +1739,8 @@ PlantGraph gen_tropical_graph(const PlantTraits& traits, GrowthPhase phase, int 
         float cluster_r = 4.0f + vp.leaf_density * 7.0f;
         cluster_r *= ff;
         cluster_r = std::max(cluster_r, 3.0f);
-        if (in_envelope_ellipse(branch_end.x, branch_end.y, env_cx, env_cy,
-                                env_rx * 1.1f, env_ry * 1.1f)) {
+        if (in_envelope_ellipse(branch_end.x, branch_end.y, env_cx, env_cy, env_rx * 1.1f,
+                                env_ry * 1.1f)) {
             g.stamps.push_back({branch_end, cluster_r, cluster_r * 0.75f, StampKind::LeafBlob,
                                 traits.sprite_seed + static_cast<uint32_t>(i * 19)});
             leaf_positions.push_back(branch_end);
@@ -1761,8 +1754,7 @@ PlantGraph gen_tropical_graph(const PlantTraits& traits, GrowthPhase phase, int 
             Vec2 sub_dir = vec2_rotate(branch_dir, sub_angle);
             sub_dir.y -= 0.15f;  // reach upward
             float sub_len = branch_len * 0.5f;
-            Vec2 sub_end = {sub_start.x + sub_dir.x * sub_len,
-                            sub_start.y + sub_dir.y * sub_len};
+            Vec2 sub_end = {sub_start.x + sub_dir.x * sub_len, sub_start.y + sub_dir.y * sub_len};
             sub_end.x = std::clamp(sub_end.x, 1.0f, static_cast<float>(w) - 2.0f);
             sub_end.y = std::clamp(sub_end.y, 1.0f, static_cast<float>(h) - 2.0f);
 
@@ -1771,8 +1763,8 @@ PlantGraph gen_tropical_graph(const PlantTraits& traits, GrowthPhase phase, int 
             g.segs.push_back({seg_id, sub_start, sub_end, sr0, sr1, 2});
 
             float sub_r = cluster_r * 0.75f;
-            if (in_envelope_ellipse(sub_end.x, sub_end.y, env_cx, env_cy,
-                                    env_rx * 1.1f, env_ry * 1.1f)) {
+            if (in_envelope_ellipse(sub_end.x, sub_end.y, env_cx, env_cy, env_rx * 1.1f,
+                                    env_ry * 1.1f)) {
                 g.stamps.push_back({sub_end, sub_r, sub_r * 0.8f, StampKind::LeafBlob,
                                     traits.sprite_seed + static_cast<uint32_t>(i * 37 + 100)});
                 leaf_positions.push_back(sub_end);
@@ -1892,9 +1884,9 @@ void generate_grass(Sprite& s, MatBuf& mat, const PlantTraits& traits, const Pal
             else
                 idx = 4;
 
-            int bw = std::max(1, static_cast<int>(static_cast<float>(blade_base_w) *
-                                                      (1.0f - vert_t * 0.7f) +
-                                                  0.5f));
+            int bw = std::max(
+                1,
+                static_cast<int>(static_cast<float>(blade_base_w) * (1.0f - vert_t * 0.7f) + 0.5f));
             int x0 = base_x + drift - bw / 2;
             for (int dx = 0; dx < bw; ++dx) {
                 int edge_idx = (dx == 0 || dx == bw - 1) ? std::max(idx - 1, 0) : idx;
@@ -1957,7 +1949,8 @@ void generate_succulent(Sprite& s, MatBuf& mat, const PlantTraits& traits, const
         // Draw the cylindrical body with vertical ribs
         int n_ribs = is_barrel ? 5 : 3;
         for (int y = top_y; y <= base_y; ++y) {
-            float yt = static_cast<float>(y - top_y) / std::max(static_cast<float>(base_y - top_y), 1.0f);
+            float yt =
+                static_cast<float>(y - top_y) / std::max(static_cast<float>(base_y - top_y), 1.0f);
             // Width profile: barrel is widest at 40%, columnar tapers slightly at top
             float width_at_y;
             if (is_barrel) {
@@ -1976,8 +1969,8 @@ void generate_succulent(Sprite& s, MatBuf& mat, const PlantTraits& traits, const
                 if (px < 0 || px >= s.w)
                     continue;
 
-                float edge_frac = (hw > 0) ? std::abs(static_cast<float>(dx)) /
-                                             static_cast<float>(hw) : 0.0f;
+                float edge_frac =
+                    (hw > 0) ? std::abs(static_cast<float>(dx)) / static_cast<float>(hw) : 0.0f;
 
                 // Rib shading: vertical stripes for cylindrical look
                 float rib_phase = static_cast<float>(dx + hw) /
@@ -2034,7 +2027,8 @@ void generate_succulent(Sprite& s, MatBuf& mat, const PlantTraits& traits, const
                         int ax = elbow_x + dx;
                         if (ax >= 0 && ax < s.w) {
                             float ef = (arm_w > 1) ? std::abs(static_cast<float>(dx)) /
-                                       static_cast<float>(arm_w / 2) : 0.0f;
+                                                         static_cast<float>(arm_w / 2)
+                                                   : 0.0f;
                             int idx = (ef > 0.7f) ? 1 : 2;
                             set_px(s, mat, ax, y, pal.leaf[idx], Mat::Leaf);
                         }
@@ -2056,116 +2050,115 @@ void generate_succulent(Sprite& s, MatBuf& mat, const PlantTraits& traits, const
                 set_px(s, mat, icx, fy - 1, pal.accent, Mat::Accent);
         }
     } else {
-    // ── Rosette succulent variants (0-2) ────────────────────────────────────
+        // ── Rosette succulent variants (0-2) ────────────────────────────────────
 
-    // Back leaves (drawn first, further out and drooping)
-    // Then front leaves (drawn on top, more upright)
-    struct LeafSpec {
-        float angle;
-        float len_frac;
-        float width;
-    };
+        // Back leaves (drawn first, further out and drooping)
+        // Then front leaves (drawn on top, more upright)
+        struct LeafSpec {
+            float angle;
+            float len_frac;
+            float width;
+        };
 
-    std::vector<LeafSpec> leaves;
+        std::vector<LeafSpec> leaves;
 
-    if (variant == 0) {
-        // Aloe-like: ~7 leaves in a fan, central ones tall
-        int n = 5 + static_cast<int>(ff * 2.0f);
-        for (int i = 0; i < n; ++i) {
-            float t = static_cast<float>(i) / static_cast<float>(n - 1);
-            float a = -1.0f + t * 2.0f;
-            float center_d = std::abs(t - 0.5f) * 2.0f;
-            float len = 1.0f - center_d * 0.4f;
-            leaves.push_back({a, len, 1.5f + (1.0f - center_d) * 0.5f});
-        }
-    } else if (variant == 1) {
-        // Agave-like: fewer, wider, more spread
-        int n = 4 + static_cast<int>(ff * 2.0f);
-        for (int i = 0; i < n; ++i) {
-            float t = static_cast<float>(i) / static_cast<float>(n - 1);
-            float a = -1.3f + t * 2.6f;
-            float center_d = std::abs(t - 0.5f) * 2.0f;
-            float len = 1.0f - center_d * 0.3f;
-            leaves.push_back({a, len, 2.0f + (1.0f - center_d) * 0.5f});
-        }
-    } else {
-        // Round rosette: evenly spaced
-        int n = 6 + static_cast<int>(ff * 2.0f);
-        for (int i = 0; i < n; ++i) {
-            float t = static_cast<float>(i) / static_cast<float>(n - 1);
-            float a = -1.1f + t * 2.2f;
-            leaves.push_back({a, 0.85f + unit(rng) * 0.15f, 1.5f});
-        }
-    }
-
-    float max_leaf_len = static_cast<float>(s.h) * 0.55f * ff;
-
-    // Sort by angle magnitude descending so outer leaves are drawn first (behind)
-    std::sort(leaves.begin(), leaves.end(),
-              [](const LeafSpec& a, const LeafSpec& b) {
-                  return std::abs(a.angle) > std::abs(b.angle);
-              });
-
-    for (const auto& leaf : leaves) {
-        Vec2 dir = vec2_rotate(Vec2{0.0f, -1.0f}, leaf.angle);
-        float leaf_len = max_leaf_len * leaf.len_frac;
-        float base_w = leaf.width * ff;
-
-        int steps = std::max(2, static_cast<int>(leaf_len));
-        for (int step = 0; step < steps; ++step) {
-            float lt = static_cast<float>(step) / static_cast<float>(steps - 1);
-            float px = fcx + dir.x * static_cast<float>(step);
-            float py = fcy + dir.y * static_cast<float>(step);
-
-            float w = base_w * (1.0f - lt * 0.85f);
-            int hw = static_cast<int>(w + 0.5f);
-
-            float perp_x = -dir.y;
-            float perp_y = dir.x;
-
-            for (int d = -hw; d <= hw; ++d) {
-                int ix = static_cast<int>(px + perp_x * static_cast<float>(d) + 0.5f);
-                int iy = static_cast<int>(py + perp_y * static_cast<float>(d) + 0.5f);
-                if (ix < 0 || ix >= s.w || iy < 0 || iy >= s.h)
-                    continue;
-
-                float edge_frac = (hw > 0) ? std::abs(static_cast<float>(d)) /
-                                             static_cast<float>(hw) : 0.0f;
-                int idx = 2;
-                if (edge_frac > 0.6f)
-                    idx = 1;
-                if (lt > 0.75f)
-                    idx = std::min(idx + 1, 4);
-                if (lt < 0.15f && edge_frac < 0.3f)
-                    idx = 1;
-
-                set_px(s, mat, ix, iy, pal.leaf[idx], Mat::Leaf);
+        if (variant == 0) {
+            // Aloe-like: ~7 leaves in a fan, central ones tall
+            int n = 5 + static_cast<int>(ff * 2.0f);
+            for (int i = 0; i < n; ++i) {
+                float t = static_cast<float>(i) / static_cast<float>(n - 1);
+                float a = -1.0f + t * 2.0f;
+                float center_d = std::abs(t - 0.5f) * 2.0f;
+                float len = 1.0f - center_d * 0.4f;
+                leaves.push_back({a, len, 1.5f + (1.0f - center_d) * 0.5f});
+            }
+        } else if (variant == 1) {
+            // Agave-like: fewer, wider, more spread
+            int n = 4 + static_cast<int>(ff * 2.0f);
+            for (int i = 0; i < n; ++i) {
+                float t = static_cast<float>(i) / static_cast<float>(n - 1);
+                float a = -1.3f + t * 2.6f;
+                float center_d = std::abs(t - 0.5f) * 2.0f;
+                float len = 1.0f - center_d * 0.3f;
+                leaves.push_back({a, len, 2.0f + (1.0f - center_d) * 0.5f});
+            }
+        } else {
+            // Round rosette: evenly spaced
+            int n = 6 + static_cast<int>(ff * 2.0f);
+            for (int i = 0; i < n; ++i) {
+                float t = static_cast<float>(i) / static_cast<float>(n - 1);
+                float a = -1.1f + t * 2.2f;
+                leaves.push_back({a, 0.85f + unit(rng) * 0.15f, 1.5f});
             }
         }
 
-        // Bright tip pixel
-        float tip_x = fcx + dir.x * leaf_len;
-        float tip_y = fcy + dir.y * leaf_len;
-        int itx = static_cast<int>(tip_x);
-        int ity = static_cast<int>(tip_y);
-        if (itx >= 0 && itx < s.w && ity >= 0 && ity < s.h) {
-            set_px(s, mat, itx, ity, pal.leaf[4], Mat::Leaf);
-        }
-    }
+        float max_leaf_len = static_cast<float>(s.h) * 0.55f * ff;
 
-    // Flower stalk from center
-    if (pal.has_accent && phase == GrowthPhase::Large) {
-        int stalk_h = static_cast<int>(max_leaf_len * 0.4f);
-        int stalk_y = static_cast<int>(fcy) - static_cast<int>(max_leaf_len * 0.6f);
-        for (int y = stalk_y; y > stalk_y - stalk_h && y >= 0; --y) {
-            set_px(s, mat, icx, y, pal.leaf[1], Mat::Wood);
+        // Sort by angle magnitude descending so outer leaves are drawn first (behind)
+        std::sort(leaves.begin(), leaves.end(), [](const LeafSpec& a, const LeafSpec& b) {
+            return std::abs(a.angle) > std::abs(b.angle);
+        });
+
+        for (const auto& leaf : leaves) {
+            Vec2 dir = vec2_rotate(Vec2{0.0f, -1.0f}, leaf.angle);
+            float leaf_len = max_leaf_len * leaf.len_frac;
+            float base_w = leaf.width * ff;
+
+            int steps = std::max(2, static_cast<int>(leaf_len));
+            for (int step = 0; step < steps; ++step) {
+                float lt = static_cast<float>(step) / static_cast<float>(steps - 1);
+                float px = fcx + dir.x * static_cast<float>(step);
+                float py = fcy + dir.y * static_cast<float>(step);
+
+                float w = base_w * (1.0f - lt * 0.85f);
+                int hw = static_cast<int>(w + 0.5f);
+
+                float perp_x = -dir.y;
+                float perp_y = dir.x;
+
+                for (int d = -hw; d <= hw; ++d) {
+                    int ix = static_cast<int>(px + perp_x * static_cast<float>(d) + 0.5f);
+                    int iy = static_cast<int>(py + perp_y * static_cast<float>(d) + 0.5f);
+                    if (ix < 0 || ix >= s.w || iy < 0 || iy >= s.h)
+                        continue;
+
+                    float edge_frac =
+                        (hw > 0) ? std::abs(static_cast<float>(d)) / static_cast<float>(hw) : 0.0f;
+                    int idx = 2;
+                    if (edge_frac > 0.6f)
+                        idx = 1;
+                    if (lt > 0.75f)
+                        idx = std::min(idx + 1, 4);
+                    if (lt < 0.15f && edge_frac < 0.3f)
+                        idx = 1;
+
+                    set_px(s, mat, ix, iy, pal.leaf[idx], Mat::Leaf);
+                }
+            }
+
+            // Bright tip pixel
+            float tip_x = fcx + dir.x * leaf_len;
+            float tip_y = fcy + dir.y * leaf_len;
+            int itx = static_cast<int>(tip_x);
+            int ity = static_cast<int>(tip_y);
+            if (itx >= 0 && itx < s.w && ity >= 0 && ity < s.h) {
+                set_px(s, mat, itx, ity, pal.leaf[4], Mat::Leaf);
+            }
         }
-        int fy = std::max(1, stalk_y - stalk_h);
-        set_px(s, mat, icx, fy, pal.accent, Mat::Accent);
-        set_px(s, mat, icx - 1, fy, pal.accent_dark, Mat::Accent);
-        set_px(s, mat, icx + 1, fy, pal.accent_dark, Mat::Accent);
-        set_px(s, mat, icx, fy - 1, pal.accent, Mat::Accent);
-    }
+
+        // Flower stalk from center
+        if (pal.has_accent && phase == GrowthPhase::Large) {
+            int stalk_h = static_cast<int>(max_leaf_len * 0.4f);
+            int stalk_y = static_cast<int>(fcy) - static_cast<int>(max_leaf_len * 0.6f);
+            for (int y = stalk_y; y > stalk_y - stalk_h && y >= 0; --y) {
+                set_px(s, mat, icx, y, pal.leaf[1], Mat::Wood);
+            }
+            int fy = std::max(1, stalk_y - stalk_h);
+            set_px(s, mat, icx, fy, pal.accent, Mat::Accent);
+            set_px(s, mat, icx - 1, fy, pal.accent_dark, Mat::Accent);
+            set_px(s, mat, icx + 1, fy, pal.accent_dark, Mat::Accent);
+            set_px(s, mat, icx, fy - 1, pal.accent, Mat::Accent);
+        }
 
     }  // end rosette variants
 }
@@ -2362,8 +2355,7 @@ void remove_small_clusters(Sprite& s, MatBuf& mat, int min_size,
 // disconnected from the main structure and gets deleted. This guarantees
 // the hard invariant: all branches are connected to the trunk.
 
-void flood_fill_iterative(const MatBuf& mat, int start_x, int start_y,
-                          std::vector<bool>& visited) {
+void flood_fill_iterative(const MatBuf& mat, int start_x, int start_y, std::vector<bool>& visited) {
     std::vector<std::pair<int, int>> stack;
     stack.reserve(256);
     auto try_push = [&](int x, int y) {
@@ -2454,8 +2446,7 @@ void bridge_wood_gaps(Sprite& s, MatBuf& mat, const Palette& pal) {
                 // Check if wood on the other side (gap=1)
                 int fx = mx + dx8[d];
                 int fy = my + dy8[d];
-                if (fx >= 0 && fx < s.w && fy >= 0 && fy < s.h &&
-                    mat.get(fx, fy) == Mat::Wood) {
+                if (fx >= 0 && fx < s.w && fy >= 0 && fy < s.h && mat.get(fx, fy) == Mat::Wood) {
                     bridges.push_back({mx, my});
                     continue;
                 }
@@ -2467,8 +2458,7 @@ void bridge_wood_gaps(Sprite& s, MatBuf& mat, const Palette& pal) {
                     continue;
                 int gx = fx + dx8[d];
                 int gy = fy + dy8[d];
-                if (gx >= 0 && gx < s.w && gy >= 0 && gy < s.h &&
-                    mat.get(gx, gy) == Mat::Wood) {
+                if (gx >= 0 && gx < s.w && gy >= 0 && gy < s.h && mat.get(gx, gy) == Mat::Wood) {
                     bridges.push_back({mx, my});
                     bridges.push_back({fx, fy});
                 }
@@ -2569,7 +2559,7 @@ void add_dead_branches(Sprite& s, MatBuf& mat, uint32_t seed, int trunk_top_y,
     // Shrub: fewer, shorter
     bool is_conifer = (archetype == PlantArchetype::Conifer);
     bool is_broadleaf = (archetype == PlantArchetype::BroadleafTree);
-    int num_branches = is_conifer    ? (5 + static_cast<int>(pixel_hash(7, 7, seed) % 3))
+    int num_branches = is_conifer     ? (5 + static_cast<int>(pixel_hash(7, 7, seed) % 3))
                        : is_broadleaf ? (4 + static_cast<int>(pixel_hash(7, 7, seed) % 3))
                                       : (3 + static_cast<int>(pixel_hash(7, 7, seed) % 3));
 
@@ -2579,8 +2569,8 @@ void add_dead_branches(Sprite& s, MatBuf& mat, uint32_t seed, int trunk_top_y,
             // Evenly spaced tiers
             branch_y = zone_top + (zone_h * (bi + 1)) / (num_branches + 1);
         } else {
-            branch_y = zone_top + static_cast<int>(pixel_hash(bi, 60, seed) %
-                                                    static_cast<uint32_t>(zone_h));
+            branch_y = zone_top +
+                       static_cast<int>(pixel_hash(bi, 60, seed) % static_cast<uint32_t>(zone_h));
         }
         branch_y = std::clamp(branch_y, 1, s.h - 2);
 
@@ -2597,16 +2587,15 @@ void add_dead_branches(Sprite& s, MatBuf& mat, uint32_t seed, int trunk_top_y,
 
         for (int dir = start_dir; dir <= end_dir; dir += 2) {
             // Branch lengths scale with canvas and archetype
-            int max_reach = is_conifer ? (s.w / 2 - 2)
-                            : is_broadleaf ? (s.w / 3)
-                                           : 10;
-            int base_len = is_conifer ? (max_reach / 2 + static_cast<int>(
-                                            pixel_hash(bi, 61 + dir, seed) %
-                                            static_cast<uint32_t>(max_reach / 3 + 1)))
-                           : is_broadleaf ? (max_reach / 2 + static_cast<int>(
-                                                pixel_hash(bi, 61 + dir, seed) %
-                                                static_cast<uint32_t>(max_reach / 2 + 1)))
-                                          : (5 + static_cast<int>(pixel_hash(bi, 61, seed) % 7));
+            int max_reach = is_conifer ? (s.w / 2 - 2) : is_broadleaf ? (s.w / 3) : 10;
+            int base_len =
+                is_conifer
+                    ? (max_reach / 2 + static_cast<int>(pixel_hash(bi, 61 + dir, seed) %
+                                                        static_cast<uint32_t>(max_reach / 3 + 1)))
+                : is_broadleaf
+                    ? (max_reach / 2 + static_cast<int>(pixel_hash(bi, 61 + dir, seed) %
+                                                        static_cast<uint32_t>(max_reach / 2 + 1)))
+                    : (5 + static_cast<int>(pixel_hash(bi, 61, seed) % 7));
             // Conifers: wider at bottom (triangular), narrow at top
             int branch_len = is_conifer ? static_cast<int>(static_cast<float>(base_len) *
                                                            (0.3f + 0.7f * (1.0f - height_frac)))
@@ -2614,7 +2603,7 @@ void add_dead_branches(Sprite& s, MatBuf& mat, uint32_t seed, int trunk_top_y,
 
             // Broadleaf: branches angle upward into former canopy area
             // Conifer: nearly horizontal with slight droop
-            float rise = is_conifer    ? 0.0f
+            float rise = is_conifer     ? 0.0f
                          : is_broadleaf ? (-0.4f - height_frac * 0.3f)
                                         : (-0.3f * height_frac);
             float droop = is_conifer ? 0.15f : 0.0f;
@@ -2629,9 +2618,9 @@ void add_dead_branches(Sprite& s, MatBuf& mat, uint32_t seed, int trunk_top_y,
                 int iy = static_cast<int>(by);
                 if (ix >= 0 && ix < s.w && iy >= 0 && iy < s.h) {
                     if (mat.get(ix, iy) == Mat::Empty) {
-                        uint32_t col = (j == 0)                  ? branch_light
+                        uint32_t col = (j == 0)                ? branch_light
                                        : (j == branch_len - 1) ? branch_dark
-                                                                  : branch_col;
+                                                               : branch_col;
                         set_px(s, mat, ix, iy, col, Mat::Wood);
                     }
                 }
@@ -2816,8 +2805,8 @@ void apply_health_tint(Sprite& s, MatBuf& mat, PlantHealth health, uint32_t seed
                     continue;
                 }
                 if (health == PlantHealth::Brown && order >= 2) {
-                    float hash_val = static_cast<float>(pixel_hash(x, y, seed + 0xB0B0) & 0xFFFF) /
-                                     65535.0f;
+                    float hash_val =
+                        static_cast<float>(pixel_hash(x, y, seed + 0xB0B0) & 0xFFFF) / 65535.0f;
                     if (hash_val < 0.5f) {
                         set_pixel(s, x, y, 0);
                         mat.set(x, y, Mat::Empty);
@@ -2866,10 +2855,8 @@ void apply_health_tint(Sprite& s, MatBuf& mat, PlantHealth health, uint32_t seed
             }
         }
         if (health == PlantHealth::Dead) {
-            if (archetype == PlantArchetype::BroadleafTree ||
-                archetype == PlantArchetype::Shrub ||
-                archetype == PlantArchetype::Conifer ||
-                archetype == PlantArchetype::TropicalTree) {
+            if (archetype == PlantArchetype::BroadleafTree || archetype == PlantArchetype::Shrub ||
+                archetype == PlantArchetype::Conifer || archetype == PlantArchetype::TropicalTree) {
                 add_dead_branches(s, mat, seed, trunk_top_y, archetype);
             }
         }
@@ -2938,11 +2925,11 @@ Sprite generate_plant_sprite(const PlantTraits& traits, GrowthPhase phase, Plant
     }
 
     // Build protected wood mask before cleanup (Item 3: never delete skeleton wood)
-    bool has_graph = (traits.archetype == PlantArchetype::BroadleafTree ||
-                      traits.archetype == PlantArchetype::Conifer ||
-                      traits.archetype == PlantArchetype::Shrub ||
-                      traits.archetype == PlantArchetype::Palm ||
-                      traits.archetype == PlantArchetype::TropicalTree);
+    bool has_graph =
+        (traits.archetype == PlantArchetype::BroadleafTree ||
+         traits.archetype == PlantArchetype::Conifer || traits.archetype == PlantArchetype::Shrub ||
+         traits.archetype == PlantArchetype::Palm ||
+         traits.archetype == PlantArchetype::TropicalTree);
     ProtectedMask wood_mask;
     if (has_graph) {
         wood_mask = build_wood_mask(s, mat);

@@ -88,7 +88,7 @@ static const SpeciesProfile SPECIES[NUM_SPECIES] = {
 // clang-format on
 
 static veggen::PlantTraits make_traits_from_profile(const SpeciesProfile& sp, uint32_t seed,
-                                                     std::mt19937& rng) {
+                                                    std::mt19937& rng) {
     // Small per-instance jitter so same species looks similar but not identical
     std::uniform_int_distribution<int> jitter(-8, 8);
     std::uniform_real_distribution<float> small_var(-0.03f, 0.03f);
@@ -104,12 +104,12 @@ static veggen::PlantTraits make_traits_from_profile(const SpeciesProfile& sp, ui
     t.fertility_need = 0.3f;
     t.cluster_affinity = 0.3f;
     t.sprite_seed = seed;
-    t.base_hue = static_cast<uint8_t>(
-        std::clamp(static_cast<int>(sp.base_hue) + jitter(rng), 0, 255));
-    t.leafiness = static_cast<uint8_t>(
-        std::clamp(static_cast<int>(sp.leafiness) + jitter(rng), 0, 255));
-    t.branchiness = static_cast<uint8_t>(
-        std::clamp(static_cast<int>(sp.branchiness) + jitter(rng), 0, 255));
+    t.base_hue =
+        static_cast<uint8_t>(std::clamp(static_cast<int>(sp.base_hue) + jitter(rng), 0, 255));
+    t.leafiness =
+        static_cast<uint8_t>(std::clamp(static_cast<int>(sp.leafiness) + jitter(rng), 0, 255));
+    t.branchiness =
+        static_cast<uint8_t>(std::clamp(static_cast<int>(sp.branchiness) + jitter(rng), 0, 255));
     return t;
 }
 
@@ -118,15 +118,13 @@ static veggen::PlantTraits make_traits_from_profile(const SpeciesProfile& sp, ui
 static SDL_Surface* upscale(const veggen::Sprite& sprite, int scale) {
     int sw = sprite.w * scale;
     int sh = sprite.h * scale;
-    SDL_Surface* surf =
-        SDL_CreateRGBSurfaceWithFormat(0, sw, sh, 32, SDL_PIXELFORMAT_RGBA32);
+    SDL_Surface* surf = SDL_CreateRGBSurfaceWithFormat(0, sw, sh, 32, SDL_PIXELFORMAT_RGBA32);
     auto* dst = static_cast<uint32_t*>(surf->pixels);
     for (int y = 0; y < sh; ++y) {
         int sy = y / scale;
         for (int x = 0; x < sw; ++x) {
             int sx = x / scale;
-            dst[y * (surf->pitch / 4) + x] =
-                sprite.pixels[static_cast<size_t>(sy * sprite.w + sx)];
+            dst[y * (surf->pitch / 4) + x] = sprite.pixels[static_cast<size_t>(sy * sprite.w + sx)];
         }
     }
     return surf;
@@ -190,10 +188,12 @@ int main(int argc, char* argv[]) {
             uint32_t inst_seed = master_seed + static_cast<uint32_t>(si * 1000 + c * 7);
             std::mt19937 inst_rng(inst_seed);
             veggen::PlantTraits t = make_traits_from_profile(sp, inst_seed, inst_rng);
-            sprites[si][c] = veggen::generate_plant_sprite(t, col_specs[c].phase,
-                                                            col_specs[c].health);
-            if (sprites[si][c].w > max_w) max_w = sprites[si][c].w;
-            if (sprites[si][c].h > max_h) max_h = sprites[si][c].h;
+            sprites[si][c] =
+                veggen::generate_plant_sprite(t, col_specs[c].phase, col_specs[c].health);
+            if (sprites[si][c].w > max_w)
+                max_w = sprites[si][c].w;
+            if (sprites[si][c].h > max_h)
+                max_h = sprites[si][c].h;
         }
     }
 

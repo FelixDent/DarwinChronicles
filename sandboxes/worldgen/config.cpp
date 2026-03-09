@@ -15,7 +15,9 @@ Preset get_preset(const std::string& name) {
             .env = {.water_level = 0.45f,
                     .noise_scale = 0.02f,
                     .continent_threshold = 0.55f,
-                    .ridge_strength = 1.0f},
+                    .ridge_strength = 1.0f,
+                    .plate_count = 12,
+                    .continental_ratio = 0.40f},
         };
     }
     if (name == "venus") {
@@ -23,7 +25,9 @@ Preset get_preset(const std::string& name) {
             .env = {.water_level = 0.35f,
                     .noise_scale = 0.02f,
                     .continent_threshold = 0.65f,
-                    .ridge_strength = 1.4f},
+                    .ridge_strength = 1.4f,
+                    .plate_count = 8,
+                    .continental_ratio = 0.60f},
         };
     }
     if (name == "mars") {
@@ -31,7 +35,9 @@ Preset get_preset(const std::string& name) {
             .env = {.water_level = 0.30f,
                     .noise_scale = 0.02f,
                     .continent_threshold = 0.50f,
-                    .ridge_strength = 0.8f},
+                    .ridge_strength = 0.8f,
+                    .plate_count = 10,
+                    .continental_ratio = 0.50f},
         };
     }
     if (name == "snowball") {
@@ -39,7 +45,9 @@ Preset get_preset(const std::string& name) {
             .env = {.water_level = 0.55f,
                     .noise_scale = 0.02f,
                     .continent_threshold = 0.60f,
-                    .ridge_strength = 0.6f},
+                    .ridge_strength = 0.6f,
+                    .plate_count = 14,
+                    .continental_ratio = 0.30f},
         };
     }
     if (name == "tropical") {
@@ -47,7 +55,9 @@ Preset get_preset(const std::string& name) {
             .env = {.water_level = 0.45f,
                     .noise_scale = 0.025f,
                     .continent_threshold = 0.50f,
-                    .ridge_strength = 1.2f},
+                    .ridge_strength = 1.2f,
+                    .plate_count = 10,
+                    .continental_ratio = 0.45f},
         };
     }
     if (name == "toxic") {
@@ -55,7 +65,9 @@ Preset get_preset(const std::string& name) {
             .env = {.water_level = 0.40f,
                     .noise_scale = 0.02f,
                     .continent_threshold = 0.55f,
-                    .ridge_strength = 1.5f},
+                    .ridge_strength = 1.5f,
+                    .plate_count = 16,
+                    .continental_ratio = 0.35f},
         };
     }
     throw std::runtime_error("Unknown preset: " + name);
@@ -73,6 +85,7 @@ static void print_usage(const char* program) {
               << "  --water-level F       Override water level [0.0, 0.8]\n"
               << "  --continent-bias F    Override continent threshold [0.0, 1.0]\n"
               << "  --ridge-strength F    Override ridge strength [0.0, 3.0]\n"
+              << "  --headless            Generate BMP + stats, no window\n"
               << "  --help                Show this help\n";
 }
 
@@ -96,6 +109,8 @@ SandboxConfig parse_args(int argc, char* argv[]) {
             cfg.world_width = static_cast<uint32_t>(std::stoul(next()));
         } else if (arg == "--height") {
             cfg.world_height = static_cast<uint32_t>(std::stoul(next()));
+        } else if (arg == "--headless") {
+            cfg.headless = true;
         } else if (arg == "--preset") {
             cfg.preset = next();
         } else if (arg == "--water-level") {

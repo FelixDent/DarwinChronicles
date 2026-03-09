@@ -25,18 +25,14 @@ const char* overlay_name(OverlayMode mode) {
             return "ElevBand";
         case OverlayMode::DistOcean:
             return "DistOcean";
-        case OverlayMode::DistWater:
-            return "DistWater";
-        case OverlayMode::SoilFertility:
-            return "SoilFertility";
-        case OverlayMode::SoilHold:
-            return "SoilHold";
         case OverlayMode::Roughness:
             return "Roughness";
         case OverlayMode::Aspect:
             return "Aspect";
-        case OverlayMode::RiverFlow:
-            return "RiverFlow";
+        case OverlayMode::Geology:
+            return "Geology";
+        case OverlayMode::SoilTexture:
+            return "SoilTexture";
         default:
             return "Unknown";
     }
@@ -82,13 +78,40 @@ SDL_Color dist_color(float dist, float max_dist) {
     return {r, g, b, 180};
 }
 
-SDL_Color soil_color(float v) {
-    // Brown (low) → green (high)
-    float t = std::clamp(v, 0.0f, 1.0f);
-    auto r = static_cast<uint8_t>(140.0f * (1.0f - t) + 30.0f * t);
-    auto g = static_cast<uint8_t>(90.0f * (1.0f - t) + 180.0f * t);
-    auto b = static_cast<uint8_t>(50.0f * (1.0f - t) + 40.0f * t);
-    return {r, g, b, 180};
+SDL_Color geology_color(RockType rock) {
+    switch (rock) {
+        case RockType::Granite:
+            return {180, 130, 130, 200};  // pinkish-grey
+        case RockType::Basalt:
+            return {60, 60, 70, 200};  // dark grey
+        case RockType::Limestone:
+            return {210, 200, 170, 200};  // cream
+        case RockType::Sandstone:
+            return {210, 170, 100, 200};  // tan
+        case RockType::Shale:
+            return {100, 100, 110, 200};  // dark slate
+        case RockType::Metamorphic:
+            return {140, 120, 160, 200};  // purple-grey
+        default:
+            return {128, 128, 128, 200};
+    }
+}
+
+SDL_Color soil_texture_color(SoilTexture soil) {
+    switch (soil) {
+        case SoilTexture::Sand:
+            return {230, 210, 150, 200};  // sandy yellow
+        case SoilTexture::Loam:
+            return {140, 120, 80, 200};  // brown
+        case SoilTexture::Silt:
+            return {170, 160, 130, 200};  // light brown
+        case SoilTexture::Clay:
+            return {160, 100, 70, 200};  // reddish-brown
+        case SoilTexture::Peat:
+            return {60, 50, 30, 200};  // dark brown
+        default:
+            return {128, 128, 128, 200};
+    }
 }
 
 SDL_Color aspect_color(float aspect) {
@@ -97,7 +120,8 @@ SDL_Color aspect_color(float aspect) {
     t = std::clamp(t, 0.0f, 1.0f);
     // HSV-like wheel: R→Y→G→C→B→M→R
     float h = t * 6.0f;
-    if (h >= 6.0f) h -= 6.0f;  // wrap boundary (aspect = pi)
+    if (h >= 6.0f)
+        h -= 6.0f;  // wrap boundary (aspect = pi)
     int hi = static_cast<int>(h) % 6;
     float f = h - static_cast<float>(hi);
     uint8_t r = 0, g = 0, b = 0;
@@ -127,15 +151,6 @@ SDL_Color aspect_color(float aspect) {
             b = static_cast<uint8_t>((1.0f - f) * 255.0f);
             break;
     }
-    return {r, g, b, 180};
-}
-
-SDL_Color river_flow_color(float flow, float max_flow) {
-    // Dark blue (low flow) → bright cyan (high flow)
-    float t = (max_flow > 0.0f) ? std::clamp(flow / max_flow, 0.0f, 1.0f) : 0.0f;
-    auto r = static_cast<uint8_t>(20.0f * (1.0f - t));
-    auto g = static_cast<uint8_t>(40.0f + t * 200.0f);
-    auto b = static_cast<uint8_t>(80.0f + t * 175.0f);
     return {r, g, b, 180};
 }
 
@@ -180,18 +195,20 @@ TerrainStats compute_stats(const Terrain& terrain) {
     TerrainStats stats;
     stats.total_tiles = static_cast<uint32_t>(terrain.tiles.size());
 
-    std::vector<float> heights, slopes, fertilities, holds, roughnesses;
+    std::vector<float> heights, slopes, roughnesses;
     heights.reserve(terrain.tiles.size());
     slopes.reserve(terrain.tiles.size());
+
+    double hardness_sum = 0.0;
+    double depth_sum = 0.0;
+    uint32_t land_count = 0;
 
     for (const auto& tile : terrain.tiles) {
         stats.band_counts[static_cast<size_t>(tile.band)]++;
 
         if (tile.is_ocean)
             ++stats.ocean_tiles;
-        if (tile.is_lake)
-            ++stats.lake_tiles;
-        if (!tile.is_ocean && !tile.is_lake)
+        else
             ++stats.land_tiles;
 
         heights.push_back(tile.elev01);
@@ -199,24 +216,25 @@ TerrainStats compute_stats(const Terrain& terrain) {
 
         if (tile.dist_ocean > stats.dist_ocean_max)
             stats.dist_ocean_max = tile.dist_ocean;
-        if (tile.dist_water > stats.dist_water_max)
-            stats.dist_water_max = tile.dist_water;
 
-        if (!tile.is_ocean && tile.river_flow > stats.river_flow_max)
-            stats.river_flow_max = tile.river_flow;
-
-        if (!tile.is_ocean && !tile.is_lake) {
-            fertilities.push_back(tile.soil_fertility);
-            holds.push_back(tile.soil_hold);
+        if (!tile.is_ocean) {
             roughnesses.push_back(tile.roughness);
+            stats.rock_counts[static_cast<size_t>(tile.rock)]++;
+            stats.soil_counts[static_cast<size_t>(tile.soil)]++;
+            hardness_sum += static_cast<double>(tile.bedrock_hardness);
+            depth_sum += static_cast<double>(tile.soil_depth);
+            ++land_count;
         }
+    }
+
+    if (land_count > 0) {
+        stats.hardness_mean = static_cast<float>(hardness_sum / static_cast<double>(land_count));
+        stats.soil_depth_mean = static_cast<float>(depth_sum / static_cast<double>(land_count));
     }
 
     field_stats(heights, stats.height_min, stats.height_max, stats.height_mean,
                 stats.height_stddev);
     field_stats(slopes, stats.slope_min, stats.slope_max, stats.slope_mean, stats.slope_stddev);
-    field_stats_simple(fertilities, stats.fertility_min, stats.fertility_max, stats.fertility_mean);
-    field_stats_simple(holds, stats.hold_min, stats.hold_max, stats.hold_mean);
     field_stats_simple(roughnesses, stats.roughness_min, stats.roughness_max, stats.roughness_mean);
 
     return stats;
@@ -227,10 +245,6 @@ void print_stats(const TerrainStats& stats) {
     std::cout << "Total tiles: " << stats.total_tiles << "\n";
     std::cout << "  Ocean: " << stats.ocean_tiles << " (" << std::fixed << std::setprecision(1)
               << 100.0f * static_cast<float>(stats.ocean_tiles) /
-                     static_cast<float>(stats.total_tiles)
-              << "%)\n";
-    std::cout << "  Lake:  " << stats.lake_tiles << " ("
-              << 100.0f * static_cast<float>(stats.lake_tiles) /
                      static_cast<float>(stats.total_tiles)
               << "%)\n";
     std::cout << "  Land:  " << stats.land_tiles << " ("
@@ -258,11 +272,10 @@ void print_stats(const TerrainStats& stats) {
     std::cout << "\nField Statistics:\n";
     print_field("Height", stats.height_min, stats.height_max, stats.height_mean);
     print_field("Slope", stats.slope_min, stats.slope_max, stats.slope_mean);
-    print_field("Fertility", stats.fertility_min, stats.fertility_max, stats.fertility_mean);
-    print_field("SoilHold", stats.hold_min, stats.hold_max, stats.hold_mean);
     print_field("Roughness", stats.roughness_min, stats.roughness_max, stats.roughness_mean);
-    std::cout << "  Max dist_ocean: " << stats.dist_ocean_max
-              << "  Max dist_water: " << stats.dist_water_max << "\n\n";
+    std::cout << "  Max dist_ocean: " << stats.dist_ocean_max << "\n";
+    std::cout << "  Mean hardness:  " << stats.hardness_mean << "\n";
+    std::cout << "  Mean soil depth:" << stats.soil_depth_mean << " m\n\n";
 }
 
 // ── FPS counter ─────────────────────────────────────────────────────────────
@@ -322,23 +335,17 @@ void render_overlay(SDL_Renderer* renderer, const Terrain& terrain, const Terrai
                 case OverlayMode::DistOcean:
                     c = dist_color(tile.dist_ocean, stats.dist_ocean_max);
                     break;
-                case OverlayMode::DistWater:
-                    c = dist_color(tile.dist_water, stats.dist_water_max);
-                    break;
-                case OverlayMode::SoilFertility:
-                    c = soil_color(tile.soil_fertility);
-                    break;
-                case OverlayMode::SoilHold:
-                    c = soil_color(tile.soil_hold);
-                    break;
                 case OverlayMode::Roughness:
                     c = slope_color(tile.roughness);
                     break;
                 case OverlayMode::Aspect:
                     c = aspect_color(tile.aspect);
                     break;
-                case OverlayMode::RiverFlow:
-                    c = river_flow_color(tile.river_flow, stats.river_flow_max);
+                case OverlayMode::Geology:
+                    c = geology_color(tile.rock);
+                    break;
+                case OverlayMode::SoilTexture:
+                    c = soil_texture_color(tile.soil);
                     break;
                 default:
                     continue;
@@ -616,7 +623,7 @@ void render_legend(SDL_Renderer* renderer, const TerrainStats& stats, int /*win_
 
 // Draw a horizontal gradient bar sampling the given color function
 static void draw_gradient_bar(SDL_Renderer* renderer, int x, int y, int w, int h,
-                               SDL_Color (*color_fn)(float), float lo, float hi) {
+                              SDL_Color (*color_fn)(float), float lo, float hi) {
     constexpr int STEPS = 32;
     int step_w = std::max(w / STEPS, 1);
     for (int i = 0; i < STEPS; ++i) {
@@ -637,11 +644,6 @@ static void draw_gradient_bar(SDL_Renderer* renderer, int x, int y, int w, int h
 static float s_dist_max = 1.0f;
 static SDL_Color dist_color_wrap(float v) {
     return dist_color(v, s_dist_max);
-}
-
-static float s_river_flow_max = 1.0f;
-static SDL_Color river_flow_color_wrap(float v) {
-    return river_flow_color(v, s_river_flow_max);
 }
 
 void render_overlay_legend(SDL_Renderer* renderer, const TerrainStats& stats, OverlayMode mode,
@@ -667,20 +669,19 @@ void render_overlay_legend(SDL_Renderer* renderer, const TerrainStats& stats, Ov
         const char* label;
     };
 
-    // Categorical overlays
-    if (mode == OverlayMode::ElevBand) {
-        const char* cat_info = "Elevation bands from unified height";
-        SwatchEntry entries[] = {
-            {elevband_color(ElevBand::Water), "Water"},
-            {elevband_color(ElevBand::Lowland), "Lowland"},
-            {elevband_color(ElevBand::Hills), "Hills"},
-            {elevband_color(ElevBand::Mountains), "Mountains"},
-        };
-        int num = 4;
+    // Helper lambda for categorical overlay legends
+    auto render_categorical = [&](const char* title, const char* cat_info, SwatchEntry* entries,
+                                  int num) {
         int cat_info_w = text_pixel_width(cat_info, 1);
-        int swatch_col_w = TEXT_X_OFF + text_pixel_width("Mountains", SCALE) + PAD;
+        int max_label_w = 0;
+        for (int i = 0; i < num; ++i) {
+            int lw = text_pixel_width(entries[i].label, SCALE);
+            if (lw > max_label_w)
+                max_label_w = lw;
+        }
+        int swatch_col_w = TEXT_X_OFF + max_label_w + PAD;
         int panel_w = std::max(swatch_col_w, cat_info_w + PAD * 2);
-        int panel_h = PAD * 2 + ROW_H * (num + 1) + ROW_H + 4;  // info line + gap
+        int panel_h = PAD * 2 + ROW_H * (num + 1) + ROW_H + 4;
         int panel_x = PAD;
         int panel_y = win_h - terrain_legend_h - panel_h - PAD;
 
@@ -692,7 +693,7 @@ void render_overlay_legend(SDL_Renderer* renderer, const TerrainStats& stats, Ov
         SDL_RenderDrawRect(renderer, &bg);
 
         int y = panel_y + PAD;
-        draw_text(renderer, panel_x + PAD, y + 2, overlay_name(mode), SCALE, 220, 220, 220);
+        draw_text(renderer, panel_x + PAD, y + 2, title, SCALE, 220, 220, 220);
         y += ROW_H;
 
         for (int i = 0; i < num; ++i) {
@@ -702,12 +703,47 @@ void render_overlay_legend(SDL_Renderer* renderer, const TerrainStats& stats, Ov
             SDL_RenderFillRect(renderer, &sw);
             SDL_SetRenderDrawColor(renderer, 40, 40, 40, 255);
             SDL_RenderDrawRect(renderer, &sw);
-            draw_text(renderer, panel_x + TEXT_X_OFF, y + 3, entries[i].label, SCALE, 200, 200, 200);
+            draw_text(renderer, panel_x + TEXT_X_OFF, y + 3, entries[i].label, SCALE, 200, 200,
+                      200);
             y += ROW_H;
         }
 
         y += 4;
         draw_text(renderer, panel_x + PAD, y + 2, cat_info, 1, 140, 150, 160);
+    };
+
+    // Categorical overlays
+    if (mode == OverlayMode::ElevBand) {
+        SwatchEntry entries[] = {
+            {elevband_color(ElevBand::Water), "Water"},
+            {elevband_color(ElevBand::Lowland), "Lowland"},
+            {elevband_color(ElevBand::Hills), "Hills"},
+            {elevband_color(ElevBand::Mountains), "Mountains"},
+        };
+        render_categorical("ElevBand", "Elevation bands from unified height", entries, 4);
+        return;
+    }
+    if (mode == OverlayMode::Geology) {
+        SwatchEntry entries[] = {
+            {geology_color(RockType::Granite), "Granite"},
+            {geology_color(RockType::Basalt), "Basalt"},
+            {geology_color(RockType::Limestone), "Limestone"},
+            {geology_color(RockType::Sandstone), "Sandstone"},
+            {geology_color(RockType::Shale), "Shale"},
+            {geology_color(RockType::Metamorphic), "Metamorphic"},
+        };
+        render_categorical("Geology", "Bedrock type from tectonic context", entries, 6);
+        return;
+    }
+    if (mode == OverlayMode::SoilTexture) {
+        SwatchEntry entries[] = {
+            {soil_texture_color(SoilTexture::Sand), "Sand"},
+            {soil_texture_color(SoilTexture::Loam), "Loam"},
+            {soil_texture_color(SoilTexture::Silt), "Silt"},
+            {soil_texture_color(SoilTexture::Clay), "Clay"},
+            {soil_texture_color(SoilTexture::Peat), "Peat"},
+        };
+        render_categorical("SoilTexture", "Soil texture from rock + terrain", entries, 5);
         return;
     }
 
@@ -741,28 +777,6 @@ void render_overlay_legend(SDL_Renderer* renderer, const TerrainStats& stats, Ov
             s_dist_max = std::max(stats.dist_ocean_max, 1.0f);
             color_fn = dist_color_wrap;
             break;
-        case OverlayMode::DistWater:
-            desc = "Dist Water";
-            info = "Euclidean distance to any water (ocean/lake)";
-            lo_label = "Near";
-            hi_label = "Far";
-            s_dist_max = std::max(stats.dist_water_max, 1.0f);
-            color_fn = dist_color_wrap;
-            break;
-        case OverlayMode::SoilFertility:
-            desc = "Fertility";
-            info = "Soil fertility: noise + water proximity - slope";
-            lo_label = "Low";
-            hi_label = "High";
-            color_fn = soil_color;
-            break;
-        case OverlayMode::SoilHold:
-            desc = "Soil Hold";
-            info = "Soil water retention capacity";
-            lo_label = "Low";
-            hi_label = "High";
-            color_fn = soil_color;
-            break;
         case OverlayMode::Roughness:
             desc = "Roughness";
             info = "Local height variance (3x3 neighborhood)";
@@ -776,14 +790,6 @@ void render_overlay_legend(SDL_Renderer* renderer, const TerrainStats& stats, Ov
             lo_label = "W";
             hi_label = "E";
             color_fn = aspect_color;
-            break;
-        case OverlayMode::RiverFlow:
-            desc = "River Flow";
-            info = "Flow accumulation along downhill paths";
-            lo_label = "Low";
-            hi_label = "High";
-            s_river_flow_max = std::max(stats.river_flow_max, 1.0f);
-            color_fn = river_flow_color_wrap;
             break;
         default:
             return;
@@ -820,13 +826,9 @@ void render_overlay_legend(SDL_Renderer* renderer, const TerrainStats& stats, Ov
     float hi_val = 1.0f;
     if (mode == OverlayMode::DistOcean) {
         hi_val = stats.dist_ocean_max;
-    } else if (mode == OverlayMode::DistWater) {
-        hi_val = stats.dist_water_max;
     } else if (mode == OverlayMode::Aspect) {
         lo_val = -3.14159265f;
         hi_val = 3.14159265f;
-    } else if (mode == OverlayMode::RiverFlow) {
-        hi_val = s_river_flow_max;
     }
     draw_gradient_bar(renderer, panel_x + PAD, y, BAR_W, BAR_H, color_fn, lo_val, hi_val);
     y += BAR_H + 4;

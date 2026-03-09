@@ -205,9 +205,8 @@ void MetricsCollector::take_snapshot(const SimState& sim) {
         }
     }
     snap.plants_per_tile_mean = tile_sum / static_cast<float>(n_tiles);
-    snap.plants_per_tile_variance =
-        tile_sq / static_cast<float>(n_tiles) -
-        snap.plants_per_tile_mean * snap.plants_per_tile_mean;
+    snap.plants_per_tile_variance = tile_sq / static_cast<float>(n_tiles) -
+                                    snap.plants_per_tile_mean * snap.plants_per_tile_mean;
     snap.plants_per_tile_variance = std::max(snap.plants_per_tile_variance, 0.0f);
 
     // Environment averages
@@ -278,16 +277,17 @@ void MetricsCollector::export_csv(const char* filename) const {
     }
 
     // Header
-    std::fprintf(f, "day,living,dead_pending,new_plants,deaths_total,"
-                    "deaths_drought,deaths_cold,deaths_heat,deaths_competition,deaths_senescence,"
-                    "biomass_mean,biomass_var,"
-                    "plants_tile_mean,plants_tile_var,"
-                    "avg_temp,avg_moisture,"
-                    "growth_density_corr,replacement_ratio");
+    std::fprintf(f,
+                 "day,living,dead_pending,new_plants,deaths_total,"
+                 "deaths_drought,deaths_cold,deaths_heat,deaths_competition,deaths_senescence,"
+                 "biomass_mean,biomass_var,"
+                 "plants_tile_mean,plants_tile_var,"
+                 "avg_temp,avg_moisture,"
+                 "growth_density_corr,replacement_ratio");
 
     // Per-archetype population columns
-    const char* arch_names[] = {"grass", "shrub", "conifer", "broadleaf",
-                                "succulent", "moss", "palm", "tropical"};
+    const char* arch_names[] = {"grass",     "shrub", "conifer", "broadleaf",
+                                "succulent", "moss",  "palm",    "tropical"};
     for (int i = 0; i < NUM_ARCHETYPES; ++i)
         std::fprintf(f, ",pop_%s", arch_names[i]);
     for (int i = 0; i < NUM_ARCHETYPES; ++i)
@@ -301,18 +301,17 @@ void MetricsCollector::export_csv(const char* filename) const {
 
     // Data rows
     for (const auto& s : snapshots_) {
-        std::fprintf(f, "%.1f,%d,%d,%d,%d,%d,%d,%d,%d,%d,"
-                        "%.4f,%.4f,%.2f,%.2f,%.1f,%.3f,%.3f,%.3f",
-                     static_cast<double>(s.day), s.total_living, s.total_dead_pending,
-                     s.new_plants, s.deaths_total,
-                     s.deaths_drought, s.deaths_cold, s.deaths_heat,
-                     s.deaths_competition, s.deaths_senescence,
-                     static_cast<double>(s.biomass_mean), static_cast<double>(s.biomass_variance),
-                     static_cast<double>(s.plants_per_tile_mean),
-                     static_cast<double>(s.plants_per_tile_variance),
-                     static_cast<double>(s.avg_temperature), static_cast<double>(s.avg_moisture),
-                     static_cast<double>(s.growth_density_corr),
-                     static_cast<double>(s.replacement_ratio));
+        std::fprintf(
+            f,
+            "%.1f,%d,%d,%d,%d,%d,%d,%d,%d,%d,"
+            "%.4f,%.4f,%.2f,%.2f,%.1f,%.3f,%.3f,%.3f",
+            static_cast<double>(s.day), s.total_living, s.total_dead_pending, s.new_plants,
+            s.deaths_total, s.deaths_drought, s.deaths_cold, s.deaths_heat, s.deaths_competition,
+            s.deaths_senescence, static_cast<double>(s.biomass_mean),
+            static_cast<double>(s.biomass_variance), static_cast<double>(s.plants_per_tile_mean),
+            static_cast<double>(s.plants_per_tile_variance), static_cast<double>(s.avg_temperature),
+            static_cast<double>(s.avg_moisture), static_cast<double>(s.growth_density_corr),
+            static_cast<double>(s.replacement_ratio));
 
         for (int i = 0; i < NUM_ARCHETYPES; ++i)
             std::fprintf(f, ",%d", s.by_species[i].population);
@@ -345,22 +344,19 @@ void MetricsCollector::print_summary(const char* biome_name) const {
     const auto& first = snapshots_.front();
     const auto& last = snapshots_.back();
 
-    std::printf("\n=== %s (day %.0f - %.0f, %zu snapshots) ===\n",
-                biome_name,
-                static_cast<double>(first.day), static_cast<double>(last.day),
-                snapshots_.size());
+    std::printf("\n=== %s (day %.0f - %.0f, %zu snapshots) ===\n", biome_name,
+                static_cast<double>(first.day), static_cast<double>(last.day), snapshots_.size());
 
     // Population trajectory
     std::printf("  Population: %d -> %d (living)\n", first.total_living, last.total_living);
 
     // Species composition at end
     std::printf("  Species composition (final):\n");
-    const char* arch_names[] = {"Grass", "Shrub", "Conifer", "Broadleaf",
-                                "Succulent", "Moss", "Palm", "Tropical"};
+    const char* arch_names[] = {"Grass",     "Shrub", "Conifer", "Broadleaf",
+                                "Succulent", "Moss",  "Palm",    "Tropical"};
     for (int i = 0; i < NUM_ARCHETYPES; ++i) {
         if (last.by_species[i].population > 0) {
-            std::printf("    %-10s %3d (%.0f%%)\n", arch_names[i],
-                        last.by_species[i].population,
+            std::printf("    %-10s %3d (%.0f%%)\n", arch_names[i], last.by_species[i].population,
                         static_cast<double>(last.species_fraction[i] * 100.0f));
         }
     }
@@ -388,8 +384,8 @@ void MetricsCollector::print_summary(const char* biome_name) const {
     for (int i = 0; i < NUM_ARCHETYPES; ++i)
         for (int b = 0; b < NUM_AGE_BINS; ++b)
             age_totals[b] += last.by_species[i].age_hist[b];
-    std::printf("  Age dist: seedling=%d juvenile=%d mature=%d old=%d\n",
-                age_totals[0], age_totals[1], age_totals[2], age_totals[3]);
+    std::printf("  Age dist: seedling=%d juvenile=%d mature=%d old=%d\n", age_totals[0],
+                age_totals[1], age_totals[2], age_totals[3]);
 
     // Growth-density correlation (average across snapshots)
     float corr_sum = 0;

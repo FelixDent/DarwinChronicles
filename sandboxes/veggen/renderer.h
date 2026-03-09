@@ -12,7 +12,16 @@ namespace veggen {
 
 // ── Overlay modes ───────────────────────────────────────────────────────────
 
-enum class OverlayMode { None = 0, Moisture, Temperature, Health, Elevation, SurfaceWater, Canopy, COUNT };
+enum class OverlayMode {
+    None = 0,
+    Moisture,
+    Temperature,
+    Health,
+    Elevation,
+    SurfaceWater,
+    Canopy,
+    COUNT
+};
 
 const char* overlay_name(OverlayMode mode);
 

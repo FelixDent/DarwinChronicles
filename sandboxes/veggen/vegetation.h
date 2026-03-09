@@ -72,9 +72,9 @@ struct TileState {
     bool is_water = false;
 
     // Spatial offsets (generated at init from noise + elevation)
-    float temp_offset = 0;       // lapse rate + micro-noise (°C)
-    float orographic_factor = 1; // precip multiplier from elevation/slope/windward
-    int downhill_x = -1;         // neighbor tile for runoff routing (-1 = none/edge)
+    float temp_offset = 0;        // lapse rate + micro-noise (°C)
+    float orographic_factor = 1;  // precip multiplier from elevation/slope/windward
+    int downhill_x = -1;          // neighbor tile for runoff routing (-1 = none/edge)
     int downhill_y = -1;
 
     // Climate (varies with season, now per-tile)
@@ -83,16 +83,19 @@ struct TileState {
     float evap_demand = 0.0f;
 
     // Two-layer moisture model
-    float surface_water = 0;    // 0..1+: fills from rain, drains via runoff + infiltration
-    float root_moisture = 0.5f; // 0..1: what plants actually use, fills from infiltration
+    float surface_water = 0;     // 0..1+: fills from rain, drains via runoff + infiltration
+    float root_moisture = 0.5f;  // 0..1: what plants actually use, fills from infiltration
 
     // Convenience: total available moisture seen by external code (renderer, metrics)
     float soil_moisture() const { return root_moisture; }
     // Settable alias for init
-    void set_moisture(float m) { root_moisture = m; surface_water = m * 0.2f; }
+    void set_moisture(float m) {
+        root_moisture = m;
+        surface_water = m * 0.2f;
+    }
 
     // Plant feedback (recomputed each tick)
-    float canopy_cover = 0; // 0..1: fraction of tile shaded by plants
+    float canopy_cover = 0;  // 0..1: fraction of tile shaded by plants
 };
 
 struct BiomePreset {
@@ -149,12 +152,12 @@ struct SimState {
     void update(float dt_seconds);
 
 private:
-    void generate_terrain();       // elevation, slope, spatial offsets, downhill routing
+    void generate_terrain();  // elevation, slope, spatial offsets, downhill routing
     void update_weather();
     void update_hydrology(float dt_days);  // surface water, infiltration, runoff
-    void update_canopy_cover();    // plant→environment feedback
+    void update_canopy_cover();            // plant→environment feedback
     void spawn_plants();
-    void reproduce_plants();       // mature plants produce offspring
+    void reproduce_plants();  // mature plants produce offspring
     void update_plants(float dt_days);
     float compute_suitability(const PlantTraits& traits, const TileState& tile) const;
     PlantTraits generate_traits(PlantArchetype archetype);

@@ -237,8 +237,8 @@ void Renderer::render_plants(const SimState& sim, int win_w, int win_h) {
                                                                      : 0.25f;
                 break;
         }
-        float scale = (static_cast<float>(TILE_PX) * target_frac) /
-                       static_cast<float>(std::max(tex_h, 1));
+        float scale =
+            (static_cast<float>(TILE_PX) * target_frac) / static_cast<float>(std::max(tex_h, 1));
         int draw_w = static_cast<int>(static_cast<float>(tex_w) * scale);
         int draw_h = static_cast<int>(static_cast<float>(tex_h) * scale);
 
@@ -421,8 +421,7 @@ void Renderer::render_ui(const SimState& sim, int win_w, int /*win_h*/, OverlayM
     y += ROW_H;
 
     // Canopy cover
-    std::snprintf(buf, sizeof(buf), "CANOPY: %.0f%%",
-                  static_cast<double>(avg_canopy * 100.0f));
+    std::snprintf(buf, sizeof(buf), "CANOPY: %.0f%%", static_cast<double>(avg_canopy * 100.0f));
     draw_text(renderer_, panel_x + PAD, y, buf, SCALE, 120, 200, 100);
     y += ROW_H;
 

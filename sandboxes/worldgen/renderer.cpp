@@ -62,10 +62,6 @@ std::array<uint8_t, 3> terrain_color(const sandbox::TerrainTile& tile) {
         uint8_t b = static_cast<uint8_t>(70.0f + (1.0f - depth) * 80.0f);
         return {r, g, b};
     }
-    if (tile.is_lake) {
-        return {70, 140, 200};  // Light blue
-    }
-
     switch (tile.band) {
         case sandbox::ElevBand::Lowland: {
             // Tan/sandy tones
@@ -89,6 +85,8 @@ std::array<uint8_t, 3> terrain_color(const sandbox::TerrainTile& tile) {
             uint8_t v = static_cast<uint8_t>(130.0f + t * 110.0f);
             return {v, v, static_cast<uint8_t>(v + 5)};
         }
+        case sandbox::ElevBand::Water:
+            return {70, 140, 200};  // inland basin (light blue)
         default:
             return {100, 100, 100};
     }
@@ -185,7 +183,7 @@ void Renderer::render_terrain(const Terrain& terrain, const Camera& cam, int win
             SDL_RenderFillRect(renderer_, &dst);
 
             // Elevation indicators on land tiles
-            if (!tile.is_ocean && !tile.is_lake && dst.w >= 8) {
+            if (!tile.is_ocean && dst.w >= 8) {
                 float rough = tile.roughness;
                 // Darker shade for elevation features
                 uint8_t dr = static_cast<uint8_t>(color[0] * 0.55f);

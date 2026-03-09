@@ -40,8 +40,8 @@ struct PerSpeciesMetrics {
     float avg_biomass = 0;
     float avg_stress = 0;
     float avg_growth_rate = 0;
-    int births = 0;   // new plants this interval
-    int deaths = 0;   // deaths this interval
+    int births = 0;  // new plants this interval
+    int deaths = 0;  // deaths this interval
 };
 
 struct MetricsSnapshot {
