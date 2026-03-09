@@ -195,118 +195,51 @@ void Renderer::bake_terrain_cache(const Terrain& world, uint32_t seed, float wat
     cached_seed_ = seed;
     cached_water_level_ = water_level;
 
-    // L0 macro: 4 pixels per tile → covers full world
-    constexpr int MACRO_PPT = 4;
-    int macro_w = static_cast<int>(world.width) * MACRO_PPT;
-    int macro_h = static_cast<int>(world.height) * MACRO_PPT;
-    float macro_wpp = 1.0f / static_cast<float>(MACRO_PPT);  // world per pixel
+    auto bake_level = [&](TerrainCacheLevel& cache, int ppt) {
+        int tex_w = static_cast<int>(world.width) * ppt;
+        int tex_h = static_cast<int>(world.height) * ppt;
+        float wpp = 1.0f / static_cast<float>(ppt);
 
-    std::vector<uint32_t> pixels(static_cast<size_t>(macro_w) * macro_h);
-    render_terrain_region(world, 0.0f, 0.0f, macro_wpp, macro_w, macro_h, seed,
-                          pixels.data(), macro_w, water_level);
+        std::vector<uint32_t> pixels(static_cast<size_t>(tex_w) * tex_h);
+        render_terrain_region(world, 0.0f, 0.0f, wpp, tex_w, tex_h, seed,
+                              pixels.data(), tex_w, water_level);
 
-    // Create SDL texture from pixel data
-    if (cache_macro_.texture) SDL_DestroyTexture(cache_macro_.texture);
-    cache_macro_.texture = SDL_CreateTexture(renderer_, SDL_PIXELFORMAT_RGBA32,
-                                             SDL_TEXTUREACCESS_STATIC, macro_w, macro_h);
-    if (!cache_macro_.texture) {
-        cache_macro_.valid = false;
-        return;
-    }
-    SDL_UpdateTexture(cache_macro_.texture, nullptr, pixels.data(), macro_w * 4);
-    cache_macro_.tex_w = macro_w;
-    cache_macro_.tex_h = macro_h;
-    cache_macro_.world_x0 = 0.0f;
-    cache_macro_.world_y0 = 0.0f;
-    cache_macro_.world_per_pixel = macro_wpp;
-    cache_macro_.seed = seed;
-    cache_macro_.valid = true;
-}
-
-void Renderer::update_meso_cache(const Terrain& world, const Camera& cam, int win_w, int win_h) {
-    // Meso cache: 16 pixels per tile, covering the visible screen region + margin
-    constexpr int MESO_PPT = 16;
-    constexpr int MARGIN = 32;  // pixel margin for smooth scrolling
-
-    // Compute visible world region from camera (cam.x/y = world pixel at screen center)
-    float half_w_px = static_cast<float>(win_w) / (2.0f * cam.zoom);
-    float half_h_px = static_cast<float>(win_h) / (2.0f * cam.zoom);
-    float world_left = (cam.x - half_w_px) / static_cast<float>(TILE_SIZE);
-    float world_top = (cam.y - half_h_px) / static_cast<float>(TILE_SIZE);
-    float world_right = (cam.x + half_w_px) / static_cast<float>(TILE_SIZE);
-    float world_bottom = (cam.y + half_h_px) / static_cast<float>(TILE_SIZE);
-
-    // Clamp to world bounds
-    world_left = std::max(0.0f, world_left - 2.0f);
-    world_top = std::max(0.0f, world_top - 2.0f);
-    world_right = std::min(static_cast<float>(world.width), world_right + 2.0f);
-    world_bottom = std::min(static_cast<float>(world.height), world_bottom + 2.0f);
-
-    float world_w = world_right - world_left;
-    float world_h_f = world_bottom - world_top;
-
-    int meso_w = static_cast<int>(world_w * MESO_PPT) + MARGIN * 2;
-    int meso_h = static_cast<int>(world_h_f * MESO_PPT) + MARGIN * 2;
-
-    // Cap to reasonable size (avoid huge textures at extreme zoom)
-    meso_w = std::min(meso_w, 2048);
-    meso_h = std::min(meso_h, 2048);
-    if (meso_w < 1 || meso_h < 1) return;  // degenerate camera position
-
-    float meso_wpp = 1.0f / static_cast<float>(MESO_PPT);
-
-    // Check if we need to regenerate (use 2-tile threshold to reduce regen frequency)
-    bool needs_regen = !cache_meso_.valid ||
-                       cache_meso_.seed != cached_seed_ ||
-                       cache_meso_.tex_w != meso_w || cache_meso_.tex_h != meso_h ||
-                       std::abs(cache_meso_.world_x0 - world_left) > 2.0f ||
-                       std::abs(cache_meso_.world_y0 - world_top) > 2.0f;
-
-    if (!needs_regen) return;
-
-    // Persistent pixel buffer — avoid heap alloc/dealloc each update
-    meso_pixel_buf_.resize(static_cast<size_t>(meso_w) * meso_h);
-    render_terrain_region(world, world_left, world_top, meso_wpp, meso_w, meso_h,
-                          cached_seed_, meso_pixel_buf_.data(), meso_w, cached_water_level_);
-
-    // Reuse existing texture if dimensions match, otherwise recreate
-    if (cache_meso_.tex_w != meso_w || cache_meso_.tex_h != meso_h) {
-        if (cache_meso_.texture) SDL_DestroyTexture(cache_meso_.texture);
-        cache_meso_.texture = SDL_CreateTexture(renderer_, SDL_PIXELFORMAT_RGBA32,
-                                                SDL_TEXTUREACCESS_STREAMING, meso_w, meso_h);
-        if (!cache_meso_.texture) {
-            cache_meso_.valid = false;
+        if (cache.texture) SDL_DestroyTexture(cache.texture);
+        cache.texture = SDL_CreateTexture(renderer_, SDL_PIXELFORMAT_RGBA32,
+                                          SDL_TEXTUREACCESS_STATIC, tex_w, tex_h);
+        if (!cache.texture) {
+            cache.valid = false;
             return;
         }
-    }
-    SDL_UpdateTexture(cache_meso_.texture, nullptr, meso_pixel_buf_.data(), meso_w * 4);
-    cache_meso_.tex_w = meso_w;
-    cache_meso_.tex_h = meso_h;
-    cache_meso_.world_x0 = world_left;
-    cache_meso_.world_y0 = world_top;
-    cache_meso_.world_per_pixel = meso_wpp;
-    cache_meso_.seed = cached_seed_;
-    cache_meso_.valid = true;
+        SDL_UpdateTexture(cache.texture, nullptr, pixels.data(), tex_w * 4);
+        cache.tex_w = tex_w;
+        cache.tex_h = tex_h;
+        cache.world_x0 = 0.0f;
+        cache.world_y0 = 0.0f;
+        cache.world_per_pixel = wpp;
+        cache.seed = seed;
+        cache.valid = true;
+    };
+
+    // L0 macro: 4 px/tile — used at zoom-out (whole world fits on screen)
+    bake_level(cache_macro_, 4);
+
+    // L1 meso: 8 px/tile — used when zoomed in (256×128 world → 2048×1024 texture)
+    bake_level(cache_meso_, 8);
 }
 
 void Renderer::render_terrain(const Terrain& world, const Camera& cam, int win_w, int win_h,
                               const DynamicState* dyn) {
     // ── Clipmap terrain rendering ─────────────────────────────────────────
-    // At zoom <= 1.0: use macro cache (whole world, 4 px/tile)
-    // At zoom > 1.0: use meso cache (camera region, 16 px/tile)
-    // Both are blitted as SDL textures — no per-tile draw calls.
+    // Both levels baked once at startup. Just pick the right one and blit.
+    // Macro (4 px/tile) at low zoom, meso (8 px/tile) when zoomed in.
 
     float tile_screen = static_cast<float>(TILE_SIZE) * cam.zoom;
-    float effective_ppt = tile_screen;  // screen pixels per world tile
 
-    // Choose cache level based on zoom
+    // Choose cache level based on zoom (meso at ~0.75x+ zoom)
     TerrainCacheLevel* active_cache = nullptr;
-    if (effective_ppt > 6.0f) {
-        // Meso: update if camera moved significantly (creates cache on first call)
-        update_meso_cache(world, cam, win_w, win_h);
-        if (cache_meso_.valid) {
-            active_cache = &cache_meso_;
-        }
+    if (tile_screen > 6.0f && cache_meso_.valid) {
+        active_cache = &cache_meso_;
     }
     if (!active_cache && cache_macro_.valid) {
         active_cache = &cache_macro_;

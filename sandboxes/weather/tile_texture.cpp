@@ -450,68 +450,44 @@ uint32_t eval_pixel_internal(const Terrain& terrain, float world_x, float world_
     float detail_height = std::max(0.0f, detail_raw - 0.12f) / 0.88f;
     float elev = elev_base + detail_height * detail_amplitude;
 
-    // Compute gradient from DETAILED elevation (includes blended ridges)
-    // Wider epsilon at low LOD for smoother hillshade (avoids sparkle)
+    // Compute gradient using base terrain + primary ridge octave only.
+    // The old approach re-evaluated the full noise pipeline 4× per pixel
+    // (~70% of total cost). This cheap approach uses the base terrain
+    // gradient plus finite differences on just the primary ridge noise.
     float px_slope, px_aspect;
     {
         float grad_eps = (ppt < 6.0f) ? 1.5f : (ppt < 12.0f) ? 0.7f : 0.4f;
-        auto detailed_elev = [&](float fx, float fy) -> float {
-            float e = sample_elev(terrain, fx, fy);
-            float r = sample_field(terrain, fx, fy, &TerrainTile::roughness);
-            float t = sample_field(terrain, fx, fy, &TerrainTile::tectonic_activity);
-            float nwx = fx * BASE_PPT;
-            float nwy = fy * BASE_PPT;
-            float eaw = std::max(0.0f, e - (water_level + 0.02f));
-            float er = std::clamp(eaw * 3.3f, 0.0f, 1.0f);
-            float ef = er * er;
-            float rdn = ns.dust_n.GetNoise(nwx * 0.5f, nwy * 0.5f) * 0.5f + 0.5f;
-            float dfn = 0.5f + rdn * 0.5f;
-            float tbn = 1.0f + std::clamp(t - 0.3f, 0.0f, 0.4f);
-            float sgn = std::clamp((base_slope - 0.04f) / 0.11f, 0.2f, 1.0f);
-            float dgn = std::clamp(ef * dfn * tbn * sgn, 0.0f, 1.0f);
-            float amp = dgn * 0.40f;
-            float ws = 70.0f;
-            float ndwx = nwx + ns.warp_x.GetNoise(nwx, nwy) * ws;
-            float ndwy = nwy + ns.warp_y.GetNoise(nwx, nwy) * ws;
-            float sa = ns.strata_dir.GetNoise(nwx * 0.08f, nwy * 0.08f) * 3.14159f;
-            float nr1i = ns.ridge_main.GetNoise(ndwx, ndwy);
-            float nrd1i = std::max(0.0f, 1.0f - std::abs(nr1i) * 2.0f);
-            float sc = std::cos(sa), ss_v = std::sin(sa);
-            float al = ndwx * sc + ndwy * ss_v;
-            float cr = -ndwx * ss_v + ndwy * sc;
-            float nr1d = ns.ridge_main.GetNoise(cr, al * 0.45f);
-            float nrd1d = std::max(0.0f, 1.0f - std::abs(nr1d) * 2.0f);
-            float nrd1 = std::pow(nrd1i * 0.70f + nrd1d * 0.30f, 1.2f);
-            float nwx2 = nwx + ns.warp_x.GetNoise(nwx*0.9f+300.0f, nwy*0.9f) * 55.0f;
-            float nwy2 = nwy + ns.warp_y.GetNoise(nwx*0.9f, nwy*0.9f+300.0f) * 55.0f;
-            float nr2 = ns.ridge_sec.GetNoise(nwx2, nwy2);
-            float nrd2 = std::max(0.0f, 1.0f - std::abs(nr2) * 2.0f);
-            // LOD-gated fine octaves in gradient lambda
-            float nrd3 = 0.0f, nrd4 = 0.0f;
-            if (ppt >= 6.0f) {
-                float nr3 = ns.ridge_fine.GetNoise(ndwx * 0.7f, ndwy * 0.7f);
-                nrd3 = std::max(0.0f, 1.0f - std::abs(nr3) * 2.0f);
-                if (ppt >= 12.0f) {
-                    float nr4 = ns.ridge_fine.GetNoise(ndwx*1.8f+500.0f, ndwy*1.8f+500.0f);
-                    nrd4 = std::max(0.0f, 1.0f - std::abs(nr4) * 2.0f);
-                }
-            }
-            float dh_raw;
-            if (ppt < 6.0f)
-                dh_raw = nrd1 * 0.60f + nrd2 * 0.40f;
-            else if (ppt < 12.0f)
-                dh_raw = nrd1 * 0.48f + nrd2 * 0.32f + nrd3 * 0.20f;
-            else
-                dh_raw = nrd1 * 0.42f + nrd2 * 0.28f + nrd3 * 0.18f + nrd4 * 0.12f;
-            float dh = std::max(0.0f, dh_raw - 0.12f) / 0.88f;
-            return e + dh * amp;
-        };
-        float dzdx = detailed_elev(tile_fx + grad_eps, tile_fy) -
-                     detailed_elev(tile_fx - grad_eps, tile_fy);
-        float dzdy = detailed_elev(tile_fx, tile_fy + grad_eps) -
-                     detailed_elev(tile_fx, tile_fy - grad_eps);
-        dzdx /= (2.0f * grad_eps);
-        dzdy /= (2.0f * grad_eps);
+
+        // Base terrain gradient (2 bilinear samples per axis)
+        float base_dzdx = (sample_elev(terrain, tile_fx + grad_eps, tile_fy) -
+                           sample_elev(terrain, tile_fx - grad_eps, tile_fy)) /
+                          (2.0f * grad_eps);
+        float base_dzdy = (sample_elev(terrain, tile_fx, tile_fy + grad_eps) -
+                           sample_elev(terrain, tile_fx, tile_fy - grad_eps)) /
+                          (2.0f * grad_eps);
+
+        // Ridge gradient from primary octave only (2 noise samples per axis)
+        // Uses the already-computed domain warp coordinates
+        float ridge_dzdx = 0.0f, ridge_dzdy = 0.0f;
+        if (detail_amplitude > 0.001f) {
+            float neps = grad_eps * BASE_PPT;
+            float r_xp = ns.ridge_main.GetNoise(dwx + neps, dwy);
+            float r_xn = ns.ridge_main.GetNoise(dwx - neps, dwy);
+            float r_yp = ns.ridge_main.GetNoise(dwx, dwy + neps);
+            float r_yn = ns.ridge_main.GetNoise(dwx, dwy - neps);
+            // Convert ridged noise to ridge height
+            auto to_ridge = [](float raw) {
+                float r = std::max(0.0f, 1.0f - std::abs(raw) * 2.0f);
+                return std::max(0.0f, r - 0.12f) / 0.88f;
+            };
+            ridge_dzdx = (to_ridge(r_xp) - to_ridge(r_xn)) / (2.0f * neps) *
+                         detail_amplitude * BASE_PPT;
+            ridge_dzdy = (to_ridge(r_yp) - to_ridge(r_yn)) / (2.0f * neps) *
+                         detail_amplitude * BASE_PPT;
+        }
+
+        float dzdx = base_dzdx + ridge_dzdx;
+        float dzdy = base_dzdy + ridge_dzdy;
         px_slope = std::sqrt(dzdx * dzdx + dzdy * dzdy);
         px_aspect = std::atan2(-dzdy, -dzdx);
     }

@@ -116,9 +116,6 @@ private:
     TerrainCacheLevel cache_meso_;    // camera region (~16 px/tile)
     float cached_water_level_ = 0.45f;
     uint32_t cached_seed_ = 0;
-    std::vector<uint32_t> meso_pixel_buf_;  // persistent buffer for meso cache generation
-
-    void update_meso_cache(const Terrain& world, const Camera& cam, int win_w, int win_h);
 };
 
 // ── UI Buttons ──────────────────────────────────────────────────────────────
