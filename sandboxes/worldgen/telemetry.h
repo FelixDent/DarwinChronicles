@@ -35,8 +35,8 @@ SDL_Color slope_color(float s);
 SDL_Color elevband_color(ElevBand band);
 SDL_Color dist_color(float dist, float max_dist);
 SDL_Color aspect_color(float aspect);
-SDL_Color geology_color(RockType rock);
-SDL_Color soil_texture_color(SoilTexture soil);
+SDL_Color fertility_color(float fertility);
+SDL_Color soil_hold_color(float hold);
 
 // ── Terrain statistics ──────────────────────────────────────────────────────
 
@@ -51,11 +51,9 @@ struct TerrainStats {
     float dist_ocean_max = 0.0f;
     float roughness_min = 0.0f, roughness_max = 0.0f, roughness_mean = 0.0f;
 
-    // Geology stats
-    std::array<uint32_t, 6> rock_counts{};  // Granite..Metamorphic
-    std::array<uint32_t, 5> soil_counts{};  // Sand..Peat
-    float hardness_mean = 0.0f;
-    float soil_depth_mean = 0.0f;
+    // Soil stats
+    float fertility_mean = 0.0f;
+    float soil_hold_mean = 0.0f;
 };
 
 TerrainStats compute_stats(const Terrain& world);

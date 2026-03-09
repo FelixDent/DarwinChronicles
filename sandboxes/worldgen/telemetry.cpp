@@ -78,40 +78,22 @@ SDL_Color dist_color(float dist, float max_dist) {
     return {r, g, b, 180};
 }
 
-SDL_Color geology_color(RockType rock) {
-    switch (rock) {
-        case RockType::Granite:
-            return {180, 130, 130, 200};  // pinkish-grey
-        case RockType::Basalt:
-            return {60, 60, 70, 200};  // dark grey
-        case RockType::Limestone:
-            return {210, 200, 170, 200};  // cream
-        case RockType::Sandstone:
-            return {210, 170, 100, 200};  // tan
-        case RockType::Shale:
-            return {100, 100, 110, 200};  // dark slate
-        case RockType::Metamorphic:
-            return {140, 120, 160, 200};  // purple-grey
-        default:
-            return {128, 128, 128, 200};
-    }
+SDL_Color fertility_color(float fertility) {
+    // Brown (low) -> green (high)
+    float t = std::clamp(fertility, 0.0f, 1.0f);
+    auto r = static_cast<uint8_t>(180.0f * (1.0f - t) + 40.0f * t);
+    auto g = static_cast<uint8_t>(120.0f * (1.0f - t) + 200.0f * t);
+    auto b = static_cast<uint8_t>(60.0f * (1.0f - t) + 60.0f * t);
+    return {r, g, b, 200};
 }
 
-SDL_Color soil_texture_color(SoilTexture soil) {
-    switch (soil) {
-        case SoilTexture::Sand:
-            return {230, 210, 150, 200};  // sandy yellow
-        case SoilTexture::Loam:
-            return {140, 120, 80, 200};  // brown
-        case SoilTexture::Silt:
-            return {170, 160, 130, 200};  // light brown
-        case SoilTexture::Clay:
-            return {160, 100, 70, 200};  // reddish-brown
-        case SoilTexture::Peat:
-            return {60, 50, 30, 200};  // dark brown
-        default:
-            return {128, 128, 128, 200};
-    }
+SDL_Color soil_hold_color(float hold) {
+    // Tan (low) -> dark brown (high)
+    float t = std::clamp(hold, 0.0f, 1.0f);
+    auto r = static_cast<uint8_t>(220.0f * (1.0f - t) + 80.0f * t);
+    auto g = static_cast<uint8_t>(200.0f * (1.0f - t) + 60.0f * t);
+    auto b = static_cast<uint8_t>(140.0f * (1.0f - t) + 30.0f * t);
+    return {r, g, b, 200};
 }
 
 SDL_Color aspect_color(float aspect) {
@@ -199,8 +181,8 @@ TerrainStats compute_stats(const Terrain& terrain) {
     heights.reserve(terrain.tiles.size());
     slopes.reserve(terrain.tiles.size());
 
-    double hardness_sum = 0.0;
-    double depth_sum = 0.0;
+    double fertility_sum = 0.0;
+    double hold_sum = 0.0;
     uint32_t land_count = 0;
 
     for (const auto& tile : terrain.tiles) {
@@ -219,17 +201,15 @@ TerrainStats compute_stats(const Terrain& terrain) {
 
         if (!tile.is_ocean) {
             roughnesses.push_back(tile.roughness);
-            stats.rock_counts[static_cast<size_t>(tile.rock)]++;
-            stats.soil_counts[static_cast<size_t>(tile.soil)]++;
-            hardness_sum += static_cast<double>(tile.bedrock_hardness);
-            depth_sum += static_cast<double>(tile.soil_depth);
+            fertility_sum += static_cast<double>(tile.soil_fertility);
+            hold_sum += static_cast<double>(tile.soil_hold);
             ++land_count;
         }
     }
 
     if (land_count > 0) {
-        stats.hardness_mean = static_cast<float>(hardness_sum / static_cast<double>(land_count));
-        stats.soil_depth_mean = static_cast<float>(depth_sum / static_cast<double>(land_count));
+        stats.fertility_mean = static_cast<float>(fertility_sum / static_cast<double>(land_count));
+        stats.soil_hold_mean = static_cast<float>(hold_sum / static_cast<double>(land_count));
     }
 
     field_stats(heights, stats.height_min, stats.height_max, stats.height_mean,
@@ -274,8 +254,8 @@ void print_stats(const TerrainStats& stats) {
     print_field("Slope", stats.slope_min, stats.slope_max, stats.slope_mean);
     print_field("Roughness", stats.roughness_min, stats.roughness_max, stats.roughness_mean);
     std::cout << "  Max dist_ocean: " << stats.dist_ocean_max << "\n";
-    std::cout << "  Mean hardness:  " << stats.hardness_mean << "\n";
-    std::cout << "  Mean soil depth:" << stats.soil_depth_mean << " m\n\n";
+    std::cout << "  Mean fertility: " << stats.fertility_mean << "\n";
+    std::cout << "  Mean soil hold: " << stats.soil_hold_mean << "\n\n";
 }
 
 // ── FPS counter ─────────────────────────────────────────────────────────────
@@ -342,10 +322,10 @@ void render_overlay(SDL_Renderer* renderer, const Terrain& terrain, const Terrai
                     c = aspect_color(tile.aspect);
                     break;
                 case OverlayMode::Geology:
-                    c = geology_color(tile.rock);
+                    c = fertility_color(tile.soil_fertility);
                     break;
                 case OverlayMode::SoilTexture:
-                    c = soil_texture_color(tile.soil);
+                    c = soil_hold_color(tile.soil_hold);
                     break;
                 default:
                     continue;
@@ -723,29 +703,7 @@ void render_overlay_legend(SDL_Renderer* renderer, const TerrainStats& stats, Ov
         render_categorical("ElevBand", "Elevation bands from unified height", entries, 4);
         return;
     }
-    if (mode == OverlayMode::Geology) {
-        SwatchEntry entries[] = {
-            {geology_color(RockType::Granite), "Granite"},
-            {geology_color(RockType::Basalt), "Basalt"},
-            {geology_color(RockType::Limestone), "Limestone"},
-            {geology_color(RockType::Sandstone), "Sandstone"},
-            {geology_color(RockType::Shale), "Shale"},
-            {geology_color(RockType::Metamorphic), "Metamorphic"},
-        };
-        render_categorical("Geology", "Bedrock type from tectonic context", entries, 6);
-        return;
-    }
-    if (mode == OverlayMode::SoilTexture) {
-        SwatchEntry entries[] = {
-            {soil_texture_color(SoilTexture::Sand), "Sand"},
-            {soil_texture_color(SoilTexture::Loam), "Loam"},
-            {soil_texture_color(SoilTexture::Silt), "Silt"},
-            {soil_texture_color(SoilTexture::Clay), "Clay"},
-            {soil_texture_color(SoilTexture::Peat), "Peat"},
-        };
-        render_categorical("SoilTexture", "Soil texture from rock + terrain", entries, 5);
-        return;
-    }
+    // Geology and SoilTexture are now gradient overlays (handled below)
 
     // Gradient overlays
     const char* lo_label = "0";
@@ -790,6 +748,20 @@ void render_overlay_legend(SDL_Renderer* renderer, const TerrainStats& stats, Ov
             lo_label = "W";
             hi_label = "E";
             color_fn = aspect_color;
+            break;
+        case OverlayMode::Geology:
+            desc = "Fertility";
+            info = "Soil fertility (noise - slope + water proximity)";
+            lo_label = "Low";
+            hi_label = "High";
+            color_fn = fertility_color;
+            break;
+        case OverlayMode::SoilTexture:
+            desc = "Soil Hold";
+            info = "Material noise + lowland bonus";
+            lo_label = "Low";
+            hi_label = "High";
+            color_fn = soil_hold_color;
             break;
         default:
             return;

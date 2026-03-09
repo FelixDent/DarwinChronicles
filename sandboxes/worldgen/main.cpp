@@ -133,11 +133,13 @@ static void export_log(const SandboxConfig& cfg, const GenerationTimings& timing
     out << "  Height:       " << timings.height_ms << " ms\n";
     out << "  Ridge:        " << timings.ridge_ms << " ms\n";
     out << "  Unify:        " << timings.unify_ms << " ms\n";
-    out << "  Ocean:        " << timings.ocean_ms << " ms\n";
+    out << "  Ocean/Lake:   " << timings.ocean_lake_ms << " ms\n";
     out << "  Slope/Band:   " << timings.slope_band_ms << " ms\n";
     out << "  Dist Fields:  " << timings.dist_fields_ms << " ms\n";
-    out << "  Geology:      " << timings.geology_ms << " ms\n";
+    out << "  Soil:         " << timings.soil_ms << " ms\n";
     out << "  Roughness:    " << timings.roughness_ms << " ms\n";
+    out << "  Downhill:     " << timings.downhill_ms << " ms\n";
+    out << "  River:        " << timings.river_ms << " ms\n";
     out << "  Total:        " << timings.total_ms << " ms\n\n";
 
     out << "Tile Counts:\n";
@@ -205,11 +207,13 @@ int main(int argc, char* argv[]) {
               << " ms\n";
     std::cout << "  Ridge:        " << timings.ridge_ms << " ms\n";
     std::cout << "  Unify:        " << timings.unify_ms << " ms\n";
-    std::cout << "  Ocean:        " << timings.ocean_ms << " ms\n";
+    std::cout << "  Ocean/Lake:   " << timings.ocean_lake_ms << " ms\n";
     std::cout << "  Slope/Band:   " << timings.slope_band_ms << " ms\n";
     std::cout << "  Dist Fields:  " << timings.dist_fields_ms << " ms\n";
-    std::cout << "  Geology:      " << timings.geology_ms << " ms\n";
+    std::cout << "  Soil:         " << timings.soil_ms << " ms\n";
     std::cout << "  Roughness:    " << timings.roughness_ms << " ms\n";
+    std::cout << "  Downhill:     " << timings.downhill_ms << " ms\n";
+    std::cout << "  River:        " << timings.river_ms << " ms\n";
     std::cout << "  Total:        " << timings.total_ms << " ms\n";
 
     TerrainStats stats = compute_stats(terrain);
@@ -730,8 +734,8 @@ int main(int argc, char* argv[]) {
                       << " h=" << std::fixed << std::setprecision(2) << t.elev01
                       << " s=" << std::setprecision(2) << t.slope01
                       << " do=" << std::setprecision(0) << t.dist_ocean
-                      << " rock=" << rock_type_name(t.rock)
-                      << " soil=" << soil_texture_name(t.soil);
+                      << " fert=" << std::setprecision(2) << t.soil_fertility
+                      << " hold=" << std::setprecision(2) << t.soil_hold;
             }
 
             if (overlay != OverlayMode::None) {
