@@ -2,6 +2,9 @@
 
 #include <SDL.h>
 
+#include <cstdint>
+#include <vector>
+
 #include "atmosphere.h"
 #include "dynamics.h"
 #include "terrain_gen.h"
@@ -60,6 +63,21 @@ struct Camera {
                         int& tile_x, int& tile_y) const;
 };
 
+// ── Terrain clipmap cache ────────────────────────────────────────────────────
+// Multi-resolution procedural terrain texture cache. Each level covers a
+// screen-sized region at a different world-space resolution. Updated
+// incrementally as the camera moves (only dirty strips regenerated).
+
+struct TerrainCacheLevel {
+    SDL_Texture* texture = nullptr;    // GPU texture, RGBA32
+    int tex_w = 0, tex_h = 0;         // texture dimensions (pixels)
+    float world_x0 = 0.0f;            // world-space left edge (tile coords)
+    float world_y0 = 0.0f;            // world-space top edge
+    float world_per_pixel = 1.0f;     // world-space units per output pixel
+    bool valid = false;                // true if cache matches current camera
+    uint32_t seed = 0;                 // terrain seed used for generation
+};
+
 // ── Renderer ────────────────────────────────────────────────────────────────
 
 class Renderer {
@@ -69,8 +87,12 @@ public:
     void init(SDL_Renderer* sdl_renderer);
     void shutdown();
 
+    // Bake the macro (planetary) cache level once at startup.
+    // Must be called after terrain generation, before first render.
+    void bake_terrain_cache(const Terrain& world, uint32_t seed, float water_level = 0.45f);
+
     void render_terrain(const Terrain& world, const Camera& cam, int win_w, int win_h,
-                        const DynamicState* dyn = nullptr, bool dim_glyphs = false);
+                        const DynamicState* dyn = nullptr);
     void render_weather_overlay(const Terrain& world, const ClimateData& climate, const Camera& cam,
                                 int win_w, int win_h, OverlayMode mode,
                                 const DynamicState* dyn = nullptr,
@@ -83,8 +105,20 @@ public:
                               int win_w, int win_h, const DynamicState* dyn = nullptr,
                               const AtmosphereState* atmo = nullptr);
 
+    // Invalidate terrain cache (e.g., after terrain regeneration or preset change)
+    void invalidate_terrain_cache();
+
 private:
     SDL_Renderer* renderer_ = nullptr;
+
+    // Terrain clipmap: L0 = macro (whole world), L1 = meso (camera region)
+    TerrainCacheLevel cache_macro_;   // whole world, baked once (~4 px/tile)
+    TerrainCacheLevel cache_meso_;    // camera region (~16 px/tile)
+    float cached_water_level_ = 0.45f;
+    uint32_t cached_seed_ = 0;
+    std::vector<uint32_t> meso_pixel_buf_;  // persistent buffer for meso cache generation
+
+    void update_meso_cache(const Terrain& world, const Camera& cam, int win_w, int win_h);
 };
 
 // ── UI Buttons ──────────────────────────────────────────────────────────────

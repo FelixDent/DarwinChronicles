@@ -760,6 +760,7 @@ int main(int argc, char* argv[]) {
 
         Renderer tile_renderer;
         tile_renderer.init(sw_renderer);
+        tile_renderer.bake_terrain_cache(terrain, pr.seed, pr.env.water_level);
 
         // Camera centered on world
         Camera cam;
@@ -809,7 +810,7 @@ int main(int argc, char* argv[]) {
 
             // Terrain base (dim glyphs when overlay active)
             bool has_overlay = cap.mode != OverlayMode::None;
-            tile_renderer.render_terrain(terrain, frame_cam, WIN_W, WIN_H, &dynamics, has_overlay);
+            tile_renderer.render_terrain(terrain, frame_cam, WIN_W, WIN_H, &dynamics);
 
             // Overlay
             if (cap.mode != OverlayMode::None) {
@@ -1137,6 +1138,7 @@ int main(int argc, char* argv[]) {
         int fw, fh;
         SDL_GetWindowSize(window, &fw, &fh);
         cam.fit_world(WORLD_W, WORLD_H, Renderer::TILE_SIZE, fw, fh);
+        tile_renderer.bake_terrain_cache(terrain, preset.seed, preset.env.water_level);
         bake_current_weather();
     };
 
@@ -1545,7 +1547,7 @@ int main(int argc, char* argv[]) {
 
         bool overlay_active = weather_baked && overlay != OverlayMode::None;
         tile_renderer.render_terrain(terrain, cam, win_w, win_h,
-                                     weather_baked ? &dynamics : nullptr, overlay_active);
+                                     weather_baked ? &dynamics : nullptr);
 
         // Weather overlays (only if baked)
         if (overlay_active) {

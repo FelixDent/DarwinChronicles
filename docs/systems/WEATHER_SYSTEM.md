@@ -515,14 +515,40 @@ UI buttons for Prev, Next, and Rebake are rendered at the top of the window, alo
 
 ## Rendering
 
-Source: `sandboxes/weather/renderer.h`, `sandboxes/weather/renderer.cpp`
+Source: `sandboxes/weather/renderer.h`, `sandboxes/weather/renderer.cpp`, `sandboxes/weather/tile_texture.h`, `sandboxes/weather/tile_texture.cpp`
 
-### Terrain Tinting
+### Terrain Rendering (Clipmap + Procedural Texture)
 
-When the dynamic simulation is active, terrain tiles are tinted based on ground conditions:
+Terrain is rendered through a two-level clipmap texture cache rather than per-tile flat-color rectangles, providing geologically-grounded visual detail at any zoom level without per-frame overdraw.
+
+**Cache levels** (defined by `TerrainCacheLevel`):
+
+| Level | Alias | Resolution | Coverage | Lifetime |
+|---|---|---|---|---|
+| L0 | Macro | 4 px/tile | Whole world | Baked once at startup via `bake_terrain_cache()` |
+| L1 | Meso | 16 px/tile | Visible camera region + 2-tile margin | Regenerated when camera pans > 2 tiles via `update_meso_cache()` |
+
+At zoom below ~6 screen-pixels-per-tile the macro level is displayed; above that threshold the meso level is blitted. A flat-color per-tile fallback fires only when no cache is available (e.g., before `bake_terrain_cache()` has completed). `bake_terrain_cache(world, seed, water_level)` must be called once after terrain generation and again after any preset change. `invalidate_terrain_cache()` destroys both textures and resets validity flags (called from `Renderer::shutdown()`).
+
+**Procedural pixel evaluator** (`tile_texture.h/cpp`):
+
+`eval_terrain_pixel(terrain, world_x, world_y, pixels_per_tile, seed, water_level)` evaluates one RGBA32 pixel at arbitrary sub-tile world-space coordinates. `render_terrain_region()` fills a caller-owned pixel buffer for a rectangular patch (used by both cache levels). Noise octaves are gated by LOD (`TerrainLOD`: Macro / Meso / Micro) so that high-frequency detail is only enabled when the octave wavelength would be visible (Nyquist: wavelength ≥ 2-3 output pixels). Coloring layers applied in order:
+
+1. Hypsometric base tint from elevation band.
+2. Geology-based rock color ramp — `RockType` drives hue and value (Granite warm grey, Basalt dark, Limestone pale, Sandstone ochre, Shale blue-grey, Metamorphic mid-grey).
+3. Roughness and slope-based material texture — flat surfaces smooth, steep surfaces rough.
+4. Hillshade from a multi-directional light model.
+5. Coastal transition gradients near the water level.
+6. Scree on steep slopes (angle-gated gravel texture).
+
+Mountain triangle and hill bump glyphs have been removed — procedural texture provides terrain detail at all zoom levels. As a consequence the `dim_glyphs` flag has been removed from `render_terrain()`.
+
+**Dynamic tinting** (composited on top of the clipmap blit):
+
+When the dynamic simulation is active, terrain tiles are overlaid with semi-transparent SDL rectangles encoding ground conditions:
 
 - **Wet soil:** Darkens the red channel, slightly greens the tile, and reduces blue -- simulating saturated earth.
-- **Snow:** Blends terrain color toward white (240, 240, 255) proportional to snow depth, saturating at a depth of about 0.33.
+- **Snow:** Blends toward white (240, 240, 255) proportional to snow depth, saturating at a depth of about 0.33.
 - **Standing water:** Blends toward blue (40, 100, 200) when surface water exceeds 0.1, up to 60% blend strength.
 
 ### Precipitation Overlay

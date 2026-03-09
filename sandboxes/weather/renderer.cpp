@@ -2,57 +2,14 @@
 
 #include <algorithm>
 #include <cmath>
+#include <vector>
 
 #include "telemetry.h"
+#include "tile_texture.h"
 
 namespace {
 
-// Draw a filled triangle using scanline fill
-void fill_triangle(SDL_Renderer* renderer, int x0, int y0, int x1, int y1, int x2, int y2) {
-    if (y0 > y1) {
-        std::swap(x0, x1);
-        std::swap(y0, y1);
-    }
-    if (y0 > y2) {
-        std::swap(x0, x2);
-        std::swap(y0, y2);
-    }
-    if (y1 > y2) {
-        std::swap(x1, x2);
-        std::swap(y1, y2);
-    }
-
-    if (y2 == y0)
-        return;
-
-    for (int y = y0; y <= y2; ++y) {
-        float t_long = static_cast<float>(y - y0) / static_cast<float>(y2 - y0);
-        int xa = x0 + static_cast<int>(t_long * static_cast<float>(x2 - x0));
-
-        int xb;
-        if (y < y1) {
-            if (y1 == y0)
-                xb = x0;
-            else {
-                float t = static_cast<float>(y - y0) / static_cast<float>(y1 - y0);
-                xb = x0 + static_cast<int>(t * static_cast<float>(x1 - x0));
-            }
-        } else {
-            if (y2 == y1)
-                xb = x1;
-            else {
-                float t = static_cast<float>(y - y1) / static_cast<float>(y2 - y1);
-                xb = x1 + static_cast<int>(t * static_cast<float>(x2 - x1));
-            }
-        }
-
-        if (xa > xb)
-            std::swap(xa, xb);
-        SDL_RenderDrawLine(renderer, xa, y, xb, y);
-    }
-}
-
-// Terrain color (same as worldgen)
+// Terrain color fallback (used when no clipmap cache available)
 std::array<uint8_t, 3> terrain_color(const sandbox::TerrainTile& tile) {
     if (tile.is_ocean) {
         float depth = 1.0f - tile.elev01;
@@ -223,121 +180,219 @@ void Renderer::init(SDL_Renderer* sdl_renderer) {
 }
 
 void Renderer::shutdown() {
+    invalidate_terrain_cache();
     renderer_ = nullptr;
 }
 
+void Renderer::invalidate_terrain_cache() {
+    if (cache_macro_.texture) { SDL_DestroyTexture(cache_macro_.texture); cache_macro_.texture = nullptr; }
+    if (cache_meso_.texture) { SDL_DestroyTexture(cache_meso_.texture); cache_meso_.texture = nullptr; }
+    cache_macro_.valid = false;
+    cache_meso_.valid = false;
+}
+
+void Renderer::bake_terrain_cache(const Terrain& world, uint32_t seed, float water_level) {
+    cached_seed_ = seed;
+    cached_water_level_ = water_level;
+
+    // L0 macro: 4 pixels per tile → covers full world
+    constexpr int MACRO_PPT = 4;
+    int macro_w = static_cast<int>(world.width) * MACRO_PPT;
+    int macro_h = static_cast<int>(world.height) * MACRO_PPT;
+    float macro_wpp = 1.0f / static_cast<float>(MACRO_PPT);  // world per pixel
+
+    std::vector<uint32_t> pixels(static_cast<size_t>(macro_w) * macro_h);
+    render_terrain_region(world, 0.0f, 0.0f, macro_wpp, macro_w, macro_h, seed,
+                          pixels.data(), macro_w, water_level);
+
+    // Create SDL texture from pixel data
+    if (cache_macro_.texture) SDL_DestroyTexture(cache_macro_.texture);
+    cache_macro_.texture = SDL_CreateTexture(renderer_, SDL_PIXELFORMAT_RGBA32,
+                                             SDL_TEXTUREACCESS_STATIC, macro_w, macro_h);
+    if (!cache_macro_.texture) {
+        cache_macro_.valid = false;
+        return;
+    }
+    SDL_UpdateTexture(cache_macro_.texture, nullptr, pixels.data(), macro_w * 4);
+    cache_macro_.tex_w = macro_w;
+    cache_macro_.tex_h = macro_h;
+    cache_macro_.world_x0 = 0.0f;
+    cache_macro_.world_y0 = 0.0f;
+    cache_macro_.world_per_pixel = macro_wpp;
+    cache_macro_.seed = seed;
+    cache_macro_.valid = true;
+}
+
+void Renderer::update_meso_cache(const Terrain& world, const Camera& cam, int win_w, int win_h) {
+    // Meso cache: 16 pixels per tile, covering the visible screen region + margin
+    constexpr int MESO_PPT = 16;
+    constexpr int MARGIN = 32;  // pixel margin for smooth scrolling
+
+    // Compute visible world region from camera (cam.x/y = world pixel at screen center)
+    float half_w_px = static_cast<float>(win_w) / (2.0f * cam.zoom);
+    float half_h_px = static_cast<float>(win_h) / (2.0f * cam.zoom);
+    float world_left = (cam.x - half_w_px) / static_cast<float>(TILE_SIZE);
+    float world_top = (cam.y - half_h_px) / static_cast<float>(TILE_SIZE);
+    float world_right = (cam.x + half_w_px) / static_cast<float>(TILE_SIZE);
+    float world_bottom = (cam.y + half_h_px) / static_cast<float>(TILE_SIZE);
+
+    // Clamp to world bounds
+    world_left = std::max(0.0f, world_left - 2.0f);
+    world_top = std::max(0.0f, world_top - 2.0f);
+    world_right = std::min(static_cast<float>(world.width), world_right + 2.0f);
+    world_bottom = std::min(static_cast<float>(world.height), world_bottom + 2.0f);
+
+    float world_w = world_right - world_left;
+    float world_h_f = world_bottom - world_top;
+
+    int meso_w = static_cast<int>(world_w * MESO_PPT) + MARGIN * 2;
+    int meso_h = static_cast<int>(world_h_f * MESO_PPT) + MARGIN * 2;
+
+    // Cap to reasonable size (avoid huge textures at extreme zoom)
+    meso_w = std::min(meso_w, 2048);
+    meso_h = std::min(meso_h, 2048);
+    if (meso_w < 1 || meso_h < 1) return;  // degenerate camera position
+
+    float meso_wpp = 1.0f / static_cast<float>(MESO_PPT);
+
+    // Check if we need to regenerate (use 2-tile threshold to reduce regen frequency)
+    bool needs_regen = !cache_meso_.valid ||
+                       cache_meso_.seed != cached_seed_ ||
+                       cache_meso_.tex_w != meso_w || cache_meso_.tex_h != meso_h ||
+                       std::abs(cache_meso_.world_x0 - world_left) > 2.0f ||
+                       std::abs(cache_meso_.world_y0 - world_top) > 2.0f;
+
+    if (!needs_regen) return;
+
+    // Persistent pixel buffer — avoid heap alloc/dealloc each update
+    meso_pixel_buf_.resize(static_cast<size_t>(meso_w) * meso_h);
+    render_terrain_region(world, world_left, world_top, meso_wpp, meso_w, meso_h,
+                          cached_seed_, meso_pixel_buf_.data(), meso_w, cached_water_level_);
+
+    // Reuse existing texture if dimensions match, otherwise recreate
+    if (cache_meso_.tex_w != meso_w || cache_meso_.tex_h != meso_h) {
+        if (cache_meso_.texture) SDL_DestroyTexture(cache_meso_.texture);
+        cache_meso_.texture = SDL_CreateTexture(renderer_, SDL_PIXELFORMAT_RGBA32,
+                                                SDL_TEXTUREACCESS_STREAMING, meso_w, meso_h);
+        if (!cache_meso_.texture) {
+            cache_meso_.valid = false;
+            return;
+        }
+    }
+    SDL_UpdateTexture(cache_meso_.texture, nullptr, meso_pixel_buf_.data(), meso_w * 4);
+    cache_meso_.tex_w = meso_w;
+    cache_meso_.tex_h = meso_h;
+    cache_meso_.world_x0 = world_left;
+    cache_meso_.world_y0 = world_top;
+    cache_meso_.world_per_pixel = meso_wpp;
+    cache_meso_.seed = cached_seed_;
+    cache_meso_.valid = true;
+}
+
 void Renderer::render_terrain(const Terrain& world, const Camera& cam, int win_w, int win_h,
-                              const DynamicState* dyn, bool dim_glyphs) {
+                              const DynamicState* dyn) {
+    // ── Clipmap terrain rendering ─────────────────────────────────────────
+    // At zoom <= 1.0: use macro cache (whole world, 4 px/tile)
+    // At zoom > 1.0: use meso cache (camera region, 16 px/tile)
+    // Both are blitted as SDL textures — no per-tile draw calls.
+
+    float tile_screen = static_cast<float>(TILE_SIZE) * cam.zoom;
+    float effective_ppt = tile_screen;  // screen pixels per world tile
+
+    // Choose cache level based on zoom
+    TerrainCacheLevel* active_cache = nullptr;
+    if (effective_ppt > 6.0f) {
+        // Meso: update if camera moved significantly (creates cache on first call)
+        update_meso_cache(world, cam, win_w, win_h);
+        if (cache_meso_.valid) {
+            active_cache = &cache_meso_;
+        }
+    }
+    if (!active_cache && cache_macro_.valid) {
+        active_cache = &cache_macro_;
+    }
+
+    if (active_cache && active_cache->texture) {
+        // Compute screen rect for the cached region
+        float wpp = active_cache->world_per_pixel;
+        // World-to-screen: screen_x = (world_x * TILE_SIZE - cam.x) * cam.zoom + win_w/2
+        float screen_x0 = (active_cache->world_x0 * static_cast<float>(TILE_SIZE) - cam.x) * cam.zoom
+                          + static_cast<float>(win_w) / 2.0f;
+        float screen_y0 = (active_cache->world_y0 * static_cast<float>(TILE_SIZE) - cam.y) * cam.zoom
+                          + static_cast<float>(win_h) / 2.0f;
+        // Each cache pixel covers wpp world units = wpp * TILE_SIZE * zoom screen pixels
+        float px_scale = wpp * static_cast<float>(TILE_SIZE) * cam.zoom;
+        int dst_w = static_cast<int>(static_cast<float>(active_cache->tex_w) * px_scale);
+        int dst_h = static_cast<int>(static_cast<float>(active_cache->tex_h) * px_scale);
+
+        SDL_Rect dst_rect = {static_cast<int>(screen_x0), static_cast<int>(screen_y0), dst_w, dst_h};
+        SDL_RenderCopy(renderer_, active_cache->texture, nullptr, &dst_rect);
+    } else {
+        // Fallback: flat color rectangles (no cache available yet)
+        int min_tx, min_ty, max_tx, max_ty;
+        cam.screen_to_tile(0, 0, win_w, win_h, TILE_SIZE, min_tx, min_ty);
+        cam.screen_to_tile(win_w, win_h, win_w, win_h, TILE_SIZE, max_tx, max_ty);
+        min_tx = std::max(min_tx - 1, 0);
+        min_ty = std::max(min_ty - 1, 0);
+        max_tx = std::min(max_tx + 1, static_cast<int>(world.width) - 1);
+        max_ty = std::min(max_ty + 1, static_cast<int>(world.height) - 1);
+        for (int ty = min_ty; ty <= max_ty; ++ty) {
+            for (int tx = min_tx; tx <= max_tx; ++tx) {
+                auto color = terrain_color(world.tile_at(
+                    static_cast<uint32_t>(tx), static_cast<uint32_t>(ty)));
+                SDL_Rect dst = cam.tile_to_screen(tx, ty, TILE_SIZE, win_w, win_h);
+                SDL_SetRenderDrawColor(renderer_, color[0], color[1], color[2], 255);
+                SDL_RenderFillRect(renderer_, &dst);
+            }
+        }
+    }
+
+    // ── Dynamic tinting overlay (wet/snow/water) ──────────────────────────
+    // Drawn as semi-transparent colored rectangles on top of the terrain cache.
     int min_tx, min_ty, max_tx, max_ty;
     cam.screen_to_tile(0, 0, win_w, win_h, TILE_SIZE, min_tx, min_ty);
     cam.screen_to_tile(win_w, win_h, win_w, win_h, TILE_SIZE, max_tx, max_ty);
-
     min_tx = std::max(min_tx - 1, 0);
     min_ty = std::max(min_ty - 1, 0);
     max_tx = std::min(max_tx + 1, static_cast<int>(world.width) - 1);
     max_ty = std::min(max_ty + 1, static_cast<int>(world.height) - 1);
 
-    for (int ty = min_ty; ty <= max_ty; ++ty) {
-        for (int tx = min_tx; tx <= max_tx; ++tx) {
-            const TerrainTile& tile =
-                world.tile_at(static_cast<uint32_t>(tx), static_cast<uint32_t>(ty));
-            SDL_Rect dst = cam.tile_to_screen(tx, ty, TILE_SIZE, win_w, win_h);
+    if (dyn) {
+        SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_BLEND);
+        for (int ty = min_ty; ty <= max_ty; ++ty) {
+            for (int tx = min_tx; tx <= max_tx; ++tx) {
+                const TerrainTile& tile =
+                    world.tile_at(static_cast<uint32_t>(tx), static_cast<uint32_t>(ty));
+                if (tile.is_ocean || tile.band == sandbox::ElevBand::Water) continue;
 
-            auto color = terrain_color(tile);
-
-            // Dynamic tinting: wet soil darker/greener, snow whitens
-            if (dyn && !tile.is_ocean && tile.band != sandbox::ElevBand::Water) {
                 const auto& dt = dyn->tile_at(static_cast<uint32_t>(tx), static_cast<uint32_t>(ty));
-
-                // Wetness darkens and greens the ground
-                float wet = std::clamp(dt.soil_moisture + dt.surface_water * 0.5f, 0.0f, 1.0f);
-                color[0] = static_cast<uint8_t>(
-                    std::clamp(static_cast<float>(color[0]) * (1.0f - wet * 0.25f), 0.0f, 255.0f));
-                color[1] = static_cast<uint8_t>(
-                    std::clamp(static_cast<float>(color[1]) * (1.0f + wet * 0.08f), 0.0f, 255.0f));
-                color[2] = static_cast<uint8_t>(
-                    std::clamp(static_cast<float>(color[2]) * (1.0f - wet * 0.15f), 0.0f, 255.0f));
+                SDL_Rect dst = cam.tile_to_screen(tx, ty, TILE_SIZE, win_w, win_h);
 
                 // Snow whitens terrain
                 if (dt.snow_depth > 0.01f) {
-                    float snow_t = std::clamp(dt.snow_depth * 3.0f, 0.0f, 1.0f);
-                    color[0] = static_cast<uint8_t>(static_cast<float>(color[0]) * (1.0f - snow_t) +
-                                                    240.0f * snow_t);
-                    color[1] = static_cast<uint8_t>(static_cast<float>(color[1]) * (1.0f - snow_t) +
-                                                    240.0f * snow_t);
-                    color[2] = static_cast<uint8_t>(static_cast<float>(color[2]) * (1.0f - snow_t) +
-                                                    255.0f * snow_t);
+                    uint8_t snow_a = static_cast<uint8_t>(std::clamp(dt.snow_depth * 200.0f, 0.0f, 180.0f));
+                    SDL_SetRenderDrawColor(renderer_, 240, 240, 255, snow_a);
+                    SDL_RenderFillRect(renderer_, &dst);
                 }
-
                 // Standing water tints blue
-                if (dt.surface_water > 0.1f) {
-                    float water_t = std::clamp((dt.surface_water - 0.1f) * 2.0f, 0.0f, 0.6f);
-                    color[0] = static_cast<uint8_t>(
-                        static_cast<float>(color[0]) * (1.0f - water_t) + 40.0f * water_t);
-                    color[1] = static_cast<uint8_t>(
-                        static_cast<float>(color[1]) * (1.0f - water_t) + 100.0f * water_t);
-                    color[2] = static_cast<uint8_t>(
-                        static_cast<float>(color[2]) * (1.0f - water_t) + 200.0f * water_t);
+                else if (dt.surface_water > 0.1f) {
+                    uint8_t water_a = static_cast<uint8_t>(
+                        std::clamp((dt.surface_water - 0.1f) * 300.0f, 0.0f, 150.0f));
+                    SDL_SetRenderDrawColor(renderer_, 40, 100, 200, water_a);
+                    SDL_RenderFillRect(renderer_, &dst);
                 }
-            }
-
-            SDL_SetRenderDrawColor(renderer_, color[0], color[1], color[2], 255);
-            SDL_RenderFillRect(renderer_, &dst);
-
-            // Elevation indicators on land tiles
-            if (!tile.is_ocean && tile.band != sandbox::ElevBand::Water && dst.w >= 4) {
-                float rough = tile.roughness;
-                // When overlay active, heavily reduce glyph visibility to avoid texture noise
-                float glyph_dim;
-                uint8_t glyph_alpha;
-                if (dim_glyphs) {
-                    // Much more transparent: alpha 40-70 (was effectively 255)
-                    glyph_dim = std::clamp(0.75f + cam.zoom * 0.06f, 0.78f, 0.92f);
-                    glyph_alpha = static_cast<uint8_t>(std::clamp(30.0f + cam.zoom * 20.0f, 40.0f, 70.0f));
-                } else {
-                    glyph_dim = 0.55f;
-                    glyph_alpha = 255;
-                }
-                uint8_t dr = static_cast<uint8_t>(color[0] * glyph_dim);
-                uint8_t dg = static_cast<uint8_t>(color[1] * glyph_dim);
-                uint8_t db = static_cast<uint8_t>(color[2] * glyph_dim);
-
-                if (dim_glyphs)
-                    SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_BLEND);
-
-                if (rough >= 0.45f) {
-                    SDL_SetRenderDrawColor(renderer_, dr, dg, db, glyph_alpha);
-                    int cx = dst.x + dst.w / 2;
-                    int peak = dst.y + dst.h / 6;
-                    int base_y = dst.y + dst.h - dst.h / 6;
-                    int half_w = dst.w / 4;
-                    fill_triangle(renderer_, cx, peak, cx - half_w, base_y, cx + half_w, base_y);
-
-                    if (rough >= 0.65f) {
-                        // Snow-capped peaks
-                        {
-                            int snow_y = peak + dst.h / 5;
-                            int snow_hw = half_w / 3;
-                            uint8_t snow_a = dim_glyphs ? static_cast<uint8_t>(glyph_alpha / 2) : 255;
-                            SDL_SetRenderDrawColor(renderer_, 240, 240, 255, snow_a);
-                            fill_triangle(renderer_, cx, peak, cx - snow_hw, snow_y, cx + snow_hw,
-                                          snow_y);
-                        }
+                // Wet soil darkens
+                else {
+                    float wet = std::clamp(dt.soil_moisture + dt.surface_water * 0.5f, 0.0f, 1.0f);
+                    if (wet > 0.2f) {
+                        uint8_t wet_a = static_cast<uint8_t>((wet - 0.2f) * 80.0f);
+                        SDL_SetRenderDrawColor(renderer_, 20, 40, 10, wet_a);
+                        SDL_RenderFillRect(renderer_, &dst);
                     }
-                } else if (rough >= 0.15f) {
-                    SDL_SetRenderDrawColor(renderer_, dr, dg, db, glyph_alpha);
-                    int base_y = dst.y + dst.h - dst.h / 5;
-                    int lx = dst.x + dst.w / 3;
-                    int lp = dst.y + dst.h * 2 / 5;
-                    int lhw = dst.w / 5;
-                    fill_triangle(renderer_, lx, lp, lx - lhw, base_y, lx + lhw, base_y);
-                    int rx = dst.x + dst.w * 2 / 3;
-                    int rp = dst.y + dst.h / 3;
-                    int rhw = dst.w / 5;
-                    fill_triangle(renderer_, rx, rp, rx - rhw, base_y, rx + rhw, base_y);
                 }
             }
         }
+        SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_NONE);
     }
 }
 
