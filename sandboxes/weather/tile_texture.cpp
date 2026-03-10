@@ -528,6 +528,9 @@ void generate_transition_mask(TileTemplate& tmpl, CanonicalPair pair, Transition
         case TransitionGrade::Steep:
             band_w = 1.0f;
             break;
+        default:
+            band_w = 2.0f;
+            break;
     }
 
     for (int y = 0; y < SZ; ++y) {
@@ -958,6 +961,10 @@ const TemplateAtlas& get_template_atlas() {
     return g_atlas;
 }
 
+void reset_template_atlas(uint32_t seed) {
+    generate_template_atlas(g_atlas, seed);
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // Template-based tile rendering
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1004,8 +1011,6 @@ Col3 apply_elevation_tint(Col3 base, float elev01, float water_level) {
         Col3 color;
         float weight;  // blend strength toward tint
     };
-    static constexpr float R = 1.0f;  // just a namespace trick for readability
-    (void)R;
     const BandTint bands[ELEV_BANDS] = {
         {{220, 195, 150}, 0.45f},  // B0: coastal lowland — warm sandy
         {{210, 190, 155}, 0.42f},  // B1: low plains — warm

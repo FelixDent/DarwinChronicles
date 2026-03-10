@@ -51,7 +51,7 @@ struct TestWorld {
         env.plate_count = 12;
         env.continental_ratio = 0.40f;
         terrain = generate_terrain(128, 128, env, TEST_SEED);
-        generate_template_atlas(const_cast<TemplateAtlas&>(get_template_atlas()), TEST_SEED);
+        reset_template_atlas(TEST_SEED);
         ready = true;
     }
 };
@@ -849,7 +849,7 @@ TEST_CASE("Autotile.WaterEdgeInterpolation", "[autotile]") {
 
     // Ensure global atlas is initialized (generate_tile_texture uses it internally)
     if (!get_template_atlas().valid) {
-        generate_template_atlas(const_cast<TemplateAtlas&>(get_template_atlas()), TEST_SEED);
+        reset_template_atlas(TEST_SEED);
     }
 
     int sharp_jumps = 0;
@@ -1327,7 +1327,7 @@ TEST_CASE("Autotile.WaterColorTerrainIndependent", "[autotile]") {
     tb.roughness = 0.01f;
 
     if (!get_template_atlas().valid) {
-        generate_template_atlas(const_cast<TemplateAtlas&>(get_template_atlas()), TEST_SEED);
+        reset_template_atlas(TEST_SEED);
     }
 
     auto pix_a = generate_tile_texture(t_a, 1, 1, TEST_SEED, WATER_LEVEL);
@@ -1368,7 +1368,7 @@ TEST_CASE("Autotile.CrossTileBoundarySmooth", "[autotile]") {
     g_world.ensure();
     const auto& t = g_world.terrain;
     if (!get_template_atlas().valid) {
-        generate_template_atlas(const_cast<TemplateAtlas&>(get_template_atlas()), TEST_SEED);
+        reset_template_atlas(TEST_SEED);
     }
 
     constexpr int MAX_JUMP = 45;  // max per-channel RGB difference across boundary
@@ -1444,7 +1444,7 @@ TEST_CASE("Autotile.LandWaterBoundarySmooth", "[autotile]") {
     });
 
     if (!get_template_atlas().valid) {
-        generate_template_atlas(const_cast<TemplateAtlas&>(get_template_atlas()), TEST_SEED);
+        reset_template_atlas(TEST_SEED);
     }
 
     constexpr int MAX_JUMP = 50;
@@ -1506,7 +1506,7 @@ TEST_CASE("Autotile.MaterialBoundarySmooth", "[autotile]") {
     }
 
     if (!get_template_atlas().valid) {
-        generate_template_atlas(const_cast<TemplateAtlas&>(get_template_atlas()), TEST_SEED);
+        reset_template_atlas(TEST_SEED);
     }
 
     constexpr int MAX_JUMP = 50;
@@ -1569,7 +1569,7 @@ TEST_CASE("Autotile.NoTileBrightnessStep", "[autotile]") {
     }
 
     if (!get_template_atlas().valid) {
-        generate_template_atlas(const_cast<TemplateAtlas&>(get_template_atlas()), TEST_SEED);
+        reset_template_atlas(TEST_SEED);
     }
 
     // Render the inner 4x4 tiles (avoiding world edges where clamp effects matter)
@@ -1667,7 +1667,7 @@ TEST_CASE("Autotile.HillshadeContinuity", "[autotile]") {
     }
 
     if (!get_template_atlas().valid) {
-        generate_template_atlas(const_cast<TemplateAtlas&>(get_template_atlas()), TEST_SEED);
+        reset_template_atlas(TEST_SEED);
     }
 
     // Measure mean brightness delta at tile boundaries vs within tiles
@@ -1732,7 +1732,7 @@ TEST_CASE("Autotile.NoTileOutlineInPatch", "[autotile]") {
     }
 
     if (!get_template_atlas().valid) {
-        generate_template_atlas(const_cast<TemplateAtlas&>(get_template_atlas()), TEST_SEED);
+        reset_template_atlas(TEST_SEED);
     }
 
     // Render a region covering tiles 1-4 (avoiding world edge)

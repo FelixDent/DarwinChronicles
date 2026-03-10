@@ -298,9 +298,9 @@ void Renderer::finish_detail_bake() {
 void Renderer::bake_terrain_cache(const Terrain& world, uint32_t seed, float water_level) {
     // Ensure template atlas is generated before any rendering
     {
-        auto& atlas = const_cast<TemplateAtlas&>(get_template_atlas());
+        const auto& atlas = get_template_atlas();
         if (!atlas.valid || atlas.seed != seed) {
-            generate_template_atlas(atlas, seed);
+            reset_template_atlas(seed);
         }
     }
 
@@ -378,7 +378,11 @@ void Renderer::bake_terrain_cache(const Terrain& world, uint32_t seed, float wat
     detail_ready_.store(false, std::memory_order_relaxed);
     detail_cancel_.store(false, std::memory_order_relaxed);
 
-    // Capture what the thread needs (world is a reference — caller must keep it alive)
+    // LIFETIME CONTRACT: `world` is captured by reference. The caller must keep the
+    // Terrain object alive for the duration of this thread. Safety is guaranteed by:
+    // (1) invalidate_terrain_cache() joins the thread before any terrain destruction,
+    // (2) bake_terrain_cache() joins at entry before starting a new thread.
+    // If terrain ownership changes (e.g. moved to shared_ptr), update this capture.
     float wpp_detail = 1.0f / 16.0f;
     detail_thread_ = std::make_unique<std::thread>([this, &world, wpp_detail, seed, water_level]() {
         render_terrain_region(world, 0.0f, 0.0f, wpp_detail, detail_tex_w_, detail_tex_h_, seed,

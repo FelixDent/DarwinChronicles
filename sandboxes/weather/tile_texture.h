@@ -3,7 +3,6 @@
 #include <atomic>
 #include <cstdint>
 #include <functional>
-#include <memory>
 
 #include "terrain_gen.h"
 
@@ -131,9 +130,12 @@ struct TemplateAtlas {
 // Generate the template atlas. Call once at startup before baking terrain cache.
 void generate_template_atlas(TemplateAtlas& atlas, uint32_t seed);
 
-// Get the global atlas (thread-safe, generated lazily or explicitly).
-// Must call generate_template_atlas() before first use.
+// Get the global atlas. Must call reset_template_atlas() before first use.
 const TemplateAtlas& get_template_atlas();
+
+// Generate (or regenerate) the global atlas with the given seed.
+// Convenience wrapper that eliminates const_cast at call sites.
+void reset_template_atlas(uint32_t seed);
 
 // ── Pixel evaluator (core function) ─────────────────────────────────────────
 

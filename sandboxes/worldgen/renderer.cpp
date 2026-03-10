@@ -223,9 +223,9 @@ void Renderer::finish_detail_bake() {
 void Renderer::bake_terrain_cache(const Terrain& world, uint32_t seed, float water_level) {
     // Ensure template atlas is generated before any rendering
     {
-        auto& atlas = const_cast<TemplateAtlas&>(get_template_atlas());
+        const auto& atlas = get_template_atlas();
         if (!atlas.valid || atlas.seed != seed) {
-            generate_template_atlas(atlas, seed);
+            reset_template_atlas(seed);
         }
     }
 

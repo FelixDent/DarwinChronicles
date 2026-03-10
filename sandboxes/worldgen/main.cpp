@@ -629,9 +629,9 @@ int main(int argc, char* argv[]) {
 
         // Ensure atlas is ready before rendering
         {
-            auto& atlas = const_cast<TemplateAtlas&>(get_template_atlas());
+            const auto& atlas = get_template_atlas();
             if (!atlas.valid) {
-                generate_template_atlas(atlas, cfg.seed);
+                reset_template_atlas(cfg.seed);
             }
         }
 
@@ -845,7 +845,7 @@ int main(int argc, char* argv[]) {
             std::cout << "\n[MAP] Rendering macro map (" << map_w << "x" << map_h
                       << " @ " << MACRO_PPT << "px/tile)...\n";
 
-            generate_template_atlas(const_cast<TemplateAtlas&>(get_template_atlas()), cfg.seed);
+            reset_template_atlas(cfg.seed);
             render_terrain_region(terrain, 0.0f, 0.0f, world_per_pixel,
                                   map_w, map_h, cfg.seed, map_pixels.data(), map_w,
                                   cfg.env.water_level);
