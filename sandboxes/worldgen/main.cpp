@@ -2,6 +2,7 @@
 
 #include <csignal>
 #include <cstdlib>
+#include <cstring>
 #include <ctime>
 #include <fstream>
 #include <iomanip>
@@ -133,13 +134,11 @@ static void export_log(const SandboxConfig& cfg, const GenerationTimings& timing
     out << "  Height:       " << timings.height_ms << " ms\n";
     out << "  Ridge:        " << timings.ridge_ms << " ms\n";
     out << "  Unify:        " << timings.unify_ms << " ms\n";
-    out << "  Ocean/Lake:   " << timings.ocean_lake_ms << " ms\n";
+    out << "  Ocean:        " << timings.ocean_ms << " ms\n";
     out << "  Slope/Band:   " << timings.slope_band_ms << " ms\n";
     out << "  Dist Fields:  " << timings.dist_fields_ms << " ms\n";
-    out << "  Soil:         " << timings.soil_ms << " ms\n";
+    out << "  Geology:      " << timings.geology_ms << " ms\n";
     out << "  Roughness:    " << timings.roughness_ms << " ms\n";
-    out << "  Downhill:     " << timings.downhill_ms << " ms\n";
-    out << "  River:        " << timings.river_ms << " ms\n";
     out << "  Total:        " << timings.total_ms << " ms\n\n";
 
     out << "Tile Counts:\n";
@@ -207,13 +206,11 @@ int main(int argc, char* argv[]) {
               << " ms\n";
     std::cout << "  Ridge:        " << timings.ridge_ms << " ms\n";
     std::cout << "  Unify:        " << timings.unify_ms << " ms\n";
-    std::cout << "  Ocean/Lake:   " << timings.ocean_lake_ms << " ms\n";
+    std::cout << "  Ocean:        " << timings.ocean_ms << " ms\n";
     std::cout << "  Slope/Band:   " << timings.slope_band_ms << " ms\n";
     std::cout << "  Dist Fields:  " << timings.dist_fields_ms << " ms\n";
-    std::cout << "  Soil:         " << timings.soil_ms << " ms\n";
+    std::cout << "  Geology:      " << timings.geology_ms << " ms\n";
     std::cout << "  Roughness:    " << timings.roughness_ms << " ms\n";
-    std::cout << "  Downhill:     " << timings.downhill_ms << " ms\n";
-    std::cout << "  River:        " << timings.river_ms << " ms\n";
     std::cout << "  Total:        " << timings.total_ms << " ms\n";
 
     TerrainStats stats = compute_stats(terrain);
@@ -451,6 +448,462 @@ int main(int argc, char* argv[]) {
         return 0;
     }
 
+    // ── Tile test mode: render representative tiles at high zoom ────────
+    if (cfg.tile_test) {
+        if (SDL_Init(SDL_INIT_VIDEO) < 0) {
+            std::cerr << "SDL_Init failed: " << SDL_GetError() << "\n";
+            return 1;
+        }
+
+        const int PPT = 16;                   // native: 16 pixels per tile
+        const int PATCH = 24;                 // render 24×24 tiles centered on target
+        const int TILE_PX = PATCH * PPT;      // 384×384 pixels per sample
+        const float WPP = 1.0f / static_cast<float>(PPT);
+
+        // Categories of tiles to find
+        struct TileSample {
+            const char* label;
+            int tx, ty;
+            bool found;
+        };
+
+        // Search for representative tiles
+        auto w = cfg.world_width;
+        auto h = cfg.world_height;
+        float wl = cfg.env.water_level;
+
+        // We'll find: deep ocean, shelf, beach, flat lowland, rolling lowland,
+        // foothill, mountain slope, mountain peak, different rock types
+        TileSample samples[] = {
+            {"deep_ocean", 0, 0, false},
+            {"shelf", 0, 0, false},
+            {"beach", 0, 0, false},
+            {"coast_gentle", 0, 0, false},
+            {"coast_medium", 0, 0, false},
+            {"coast_cliff", 0, 0, false},
+            {"flat_lowland", 0, 0, false},
+            {"rolling_lowland", 0, 0, false},
+            {"hills", 0, 0, false},
+            {"mountain_slope", 0, 0, false},
+            {"mountain_peak", 0, 0, false},
+            {"steep_cliff", 0, 0, false},
+            {"interior_plateau", 0, 0, false},
+            {"coastal_plain", 0, 0, false},
+            {"river_valley", 0, 0, false},
+        };
+        constexpr int NUM_SAMPLES = sizeof(samples) / sizeof(samples[0]);
+
+        // Margin: half-patch so rendering doesn't go out of bounds
+        constexpr int M = PATCH / 2 + 1;
+
+        for (uint32_t y = M; y < h - M && !g_quit; ++y) {
+            for (uint32_t x = M; x < w - M; ++x) {
+                const auto& t = terrain.tile_at(x, y);
+                int ix = static_cast<int>(x), iy = static_cast<int>(y);
+
+                // Deep ocean: far from coast, clearly underwater
+                if (!samples[0].found && t.is_ocean && t.dist_ocean < 0.5f &&
+                    t.elev01 < wl - 0.15f) {
+                    samples[0] = {"deep_ocean", ix, iy, true};
+                }
+                // Shelf: ocean, near coast
+                if (!samples[1].found && t.is_ocean && t.dist_ocean < 0.5f &&
+                    t.elev01 > wl - 0.10f && t.elev01 < wl - 0.02f) {
+                    samples[1] = {"shelf", ix, iy, true};
+                }
+                // Beach: land, very close to ocean, low slope (flat sandy)
+                if (!samples[2].found && !t.is_ocean && t.dist_ocean < 2.0f && t.slope01 < 0.05f &&
+                    t.elev01 < wl + 0.06f) {
+                    samples[2] = {"beach", ix, iy, true};
+                }
+                // Coast tiles: must be classified as Coast family
+                // Score by land/water balance in 3×3 patch — prefer ~50/50
+                {
+                    auto cls = classify_tile(terrain, ix, iy, wl);
+                    if (cls.family == TileFamily::Coast) {
+                        bool too_close = false;
+                        for (int ci : {3, 4, 5}) {
+                            if (samples[ci].found && std::abs(ix - samples[ci].tx) < 4 &&
+                                std::abs(iy - samples[ci].ty) < 4)
+                                too_close = true;
+                        }
+                        if (!too_close) {
+                            // Count land vs water in 3×3 patch
+                            int land_count = 0, total = 0;
+                            for (int dy = -1; dy <= 1; ++dy)
+                                for (int dx = -1; dx <= 1; ++dx) {
+                                    int nx = ix + dx, ny = iy + dy;
+                                    if (nx >= 0 && nx < static_cast<int>(w) && ny >= 0 &&
+                                        ny < static_cast<int>(h)) {
+                                        if (!terrain
+                                                 .tile_at(static_cast<uint32_t>(nx),
+                                                          static_cast<uint32_t>(ny))
+                                                 .is_ocean)
+                                            land_count++;
+                                        total++;
+                                    }
+                                }
+                            float balance = static_cast<float>(land_count) /
+                                            static_cast<float>(std::max(total, 1));
+                            // Best balance is 0.5; penalize extreme ratios
+                            float score = 1.0f - 2.0f * std::abs(balance - 0.5f);
+                            // Need at least 30% land to be useful
+                            if (balance < 0.3f)
+                                score *= 0.1f;
+
+                            int slot = -1;
+                            if (cls.grade == TransitionGrade::Shallow)
+                                slot = 3;
+                            else if (cls.grade == TransitionGrade::Medium)
+                                slot = 4;
+                            else
+                                slot = 5;
+
+                            // Use score to find best tile (not just first)
+                            static float best_score[3] = {-1.0f, -1.0f, -1.0f};
+                            int si = slot - 3;
+                            if (score > best_score[si]) {
+                                best_score[si] = score;
+                                const char* labels[] = {"coast_gentle", "coast_medium",
+                                                        "coast_cliff"};
+                                samples[slot] = {labels[si], ix, iy, true};
+                            }
+                        }
+                    }
+                }
+                // Flat lowland: land, low elev, very low slope
+                if (!samples[6].found && !t.is_ocean && t.band == ElevBand::Lowland &&
+                    t.slope01 < 0.03f && t.dist_ocean > 5.0f) {
+                    samples[6] = {"flat_lowland", ix, iy, true};
+                }
+                // Rolling lowland: moderate slope, lowland band
+                if (!samples[7].found && !t.is_ocean && t.band == ElevBand::Lowland &&
+                    t.slope01 > 0.05f && t.slope01 < 0.12f && t.dist_ocean > 5.0f) {
+                    samples[7] = {"rolling_lowland", ix, iy, true};
+                }
+                // Hills: prefer inland to avoid coast confusion
+                if (!samples[8].found && t.band == ElevBand::Hills && t.slope01 > 0.08f &&
+                    t.slope01 < 0.18f && t.dist_ocean > 4.0f) {
+                    samples[8] = {"hills", ix, iy, true};
+                }
+                // Mountain slope: high elev, steep, away from coast
+                if (!samples[9].found && t.band == ElevBand::Mountains && t.slope01 > 0.15f &&
+                    t.slope01 < 0.30f && t.dist_ocean > 5.0f) {
+                    samples[9] = {"mountain_slope", ix, iy, true};
+                }
+                // Mountain peak: very high elevation, away from coast
+                if (!samples[10].found && t.band == ElevBand::Mountains && t.elev01 > 0.72f &&
+                    t.slope01 > 0.10f && t.dist_ocean > 6.0f) {
+                    samples[10] = {"mountain_peak", ix, iy, true};
+                }
+                // Steep cliff: prefer inland steep terrain
+                if (!samples[11].found && !t.is_ocean && t.slope01 > 0.25f && t.dist_ocean > 3.0f) {
+                    samples[11] = {"steep_cliff", ix, iy, true};
+                }
+                // Interior plateau: high elevation, low slope, far from coast
+                if (!samples[12].found && !t.is_ocean && t.elev01 > 0.55f && t.slope01 < 0.06f &&
+                    t.dist_ocean > 12.0f) {
+                    samples[12] = {"interior_plateau", ix, iy, true};
+                }
+                // Coastal plain: low elev, flat, near coast
+                if (!samples[13].found && !t.is_ocean && t.band == ElevBand::Lowland &&
+                    t.slope01 < 0.04f && t.dist_ocean > 2.0f && t.dist_ocean < 6.0f) {
+                    samples[13] = {"coastal_plain", ix, iy, true};
+                }
+                // River valley: low point between higher neighbors (curvature proxy)
+                if (!samples[14].found && !t.is_ocean && t.band != ElevBand::Water &&
+                    t.slope01 < 0.06f && t.roughness > 0.015f && t.elev01 > wl + 0.05f) {
+                    samples[14] = {"river_valley", ix, iy, true};
+                }
+            }
+        }
+
+        // Count found samples
+        int found_count = 0;
+        for (int i = 0; i < NUM_SAMPLES; ++i) {
+            if (samples[i].found)
+                ++found_count;
+        }
+        std::cout << "\n[TILE-TEST] Found " << found_count << "/" << NUM_SAMPLES
+                  << " representative tiles\n";
+
+        // Ensure atlas is ready before rendering
+        {
+            auto& atlas = const_cast<TemplateAtlas&>(get_template_atlas());
+            if (!atlas.valid) {
+                generate_template_atlas(atlas, cfg.seed);
+            }
+        }
+
+        // Render each found sample as a 3×3 tile patch at high zoom
+        for (int i = 0; i < NUM_SAMPLES; ++i) {
+            if (!samples[i].found) {
+                std::cout << "  SKIP: " << samples[i].label << " (not found)\n";
+                continue;
+            }
+
+            const auto& t = terrain.tile_at(static_cast<uint32_t>(samples[i].tx),
+                                            static_cast<uint32_t>(samples[i].ty));
+
+            // Classify tile family
+            auto cls = classify_tile(terrain, samples[i].tx, samples[i].ty, cfg.env.water_level);
+            const char* family_str[] = {"Pure", "Coast", "Elev"};
+            const char* grade_str[] = {"shallow", "medium", "steep"};
+            const char* edge_str[] = {"N", "E", "S", "W"};
+
+            // Print tile attributes
+            std::cout << "  " << samples[i].label << " @ (" << samples[i].tx << "," << samples[i].ty
+                      << ")"
+                      << " elev=" << std::fixed << std::setprecision(3) << t.elev01
+                      << " slope=" << t.slope01 << " dist_ocean=" << std::setprecision(1)
+                      << t.dist_ocean << " family=" << family_str[static_cast<int>(cls.family)];
+            if (cls.family != TileFamily::PureTerrain) {
+                std::cout << " " << edge_str[static_cast<int>(cls.edges.entry)] << "-"
+                          << edge_str[static_cast<int>(cls.edges.exit)] << "/"
+                          << grade_str[static_cast<int>(cls.grade)];
+            }
+            std::cout << "\n";
+
+            // Render 3×3 tile patch centered on target
+            float world_x0 = static_cast<float>(samples[i].tx - PATCH / 2);
+            float world_y0 = static_cast<float>(samples[i].ty - PATCH / 2);
+
+            std::vector<uint32_t> pixels(static_cast<size_t>(TILE_PX) *
+                                         static_cast<size_t>(TILE_PX));
+            render_terrain_region(terrain, world_x0, world_y0, WPP, TILE_PX, TILE_PX, cfg.seed,
+                                  pixels.data(), TILE_PX, cfg.env.water_level);
+
+            // Save as BMP
+            SDL_Surface* surf =
+                SDL_CreateRGBSurfaceWithFormat(0, TILE_PX, TILE_PX, 32, SDL_PIXELFORMAT_RGBA32);
+            SDL_LockSurface(surf);
+            std::memcpy(surf->pixels, pixels.data(),
+                        static_cast<size_t>(TILE_PX) * static_cast<size_t>(TILE_PX) * 4);
+            SDL_UnlockSurface(surf);
+
+            // Auto-increment version: find next unused v1, v2, v3...
+            std::string base = std::string("tile_") + samples[i].label;
+            std::string fname;
+            for (int ver = 1; ; ++ver) {
+                fname = base + "_v" + std::to_string(ver) + ".bmp";
+                std::ifstream check(fname);
+                if (!check.good()) break;
+            }
+            SDL_SaveBMP(surf, fname.c_str());
+            SDL_FreeSurface(surf);
+            std::cout << "    -> " << fname << " (" << TILE_PX << "x" << TILE_PX << " px)\n";
+        }
+
+        std::cout << "\n[TILE-TEST] Done. " << found_count << " tile images saved.\n";
+
+        // ── Synthetic grade comparison sheet ──────────────────────────────
+        // 3 grades (Shallow/Medium/Steep) × 3 materials (rows).
+        // Each cell is 5×5 tiles, ALL elevation transition tiles of the target grade.
+        // Elevation is carefully set per-tile so each tile straddles exactly one
+        // 0.08 contour (corners on opposite sides of the threshold).
+        {
+            constexpr int CELL = 5;
+            constexpr int CELL_PX = CELL * PPT;
+            constexpr int COLS = 3;  // Shallow, Medium, Steep
+            constexpr int ROWS = 3;  // Granite, Sandstone, Basalt
+            constexpr int GAP = 4;
+            constexpr int LABEL_H = 14;
+            constexpr int IMG_W = COLS * CELL_PX + (COLS - 1) * GAP;
+            constexpr int IMG_H = LABEL_H + ROWS * (CELL_PX + LABEL_H) + (ROWS - 1) * GAP;
+            constexpr int SYNTH_W = CELL + 2;
+            constexpr int SYNTH_H = CELL + 2;
+            constexpr float CONTOUR = 0.08f;
+
+            struct MatSetup {
+                const char* name;
+                RockType rock;
+                SoilTexture soil;
+            };
+            MatSetup mats[] = {
+                {"Granite", RockType::Granite, SoilTexture::Sand},
+                {"Sandstone", RockType::Sandstone, SoilTexture::Loam},
+                {"Basalt", RockType::Basalt, SoilTexture::Clay},
+            };
+
+            struct GradeSetup {
+                const char* name;
+                float target_slope;
+            };
+            GradeSetup grades[] = {
+                {"Shallow", 0.10f},
+                {"Medium", 0.27f},
+                {"Steep", 0.50f},
+            };
+
+            SDL_Surface* sheet = SDL_CreateRGBSurface(0, IMG_W, IMG_H, 32,
+                0x000000FF, 0x0000FF00, 0x00FF0000, 0xFF000000);
+            SDL_FillRect(sheet, nullptr, SDL_MapRGBA(sheet->format, 40, 40, 40, 255));
+
+            for (int row = 0; row < ROWS; ++row) {
+                for (int col_idx = 0; col_idx < COLS; ++col_idx) {
+                    Terrain synth;
+                    synth.width = SYNTH_W;
+                    synth.height = SYNTH_H;
+                    synth.tiles.resize(static_cast<size_t>(SYNTH_W * SYNTH_H));
+
+                    float slope_val = grades[col_idx].target_slope;
+
+                    // All tiles at nearly the same elevation so darkening/color is uniform.
+                    // Continuous downhill ramp: high at top (y=0), low at bottom.
+                    // The REAL elevation drop per tile is always 0.06 (< contour
+                    // spacing 0.08), ensuring each tile crosses at most one contour
+                    // and doesn't clamp. The slope01 is set independently to control
+                    // grade classification.
+                    constexpr float REAL_DROP = 0.12f;  // per tile, visual ramp (< contour spacing 0.16)
+                    float top_elev = 0.90f;
+                    for (int sy = 0; sy < SYNTH_H; ++sy) {
+                        float elev = top_elev - REAL_DROP * static_cast<float>(sy);
+                        elev = std::clamp(elev, wl + 0.02f, 0.98f);
+                        for (int sx = 0; sx < SYNTH_W; ++sx) {
+                            auto& st = synth.tiles[static_cast<size_t>(sy * SYNTH_W + sx)];
+                            st.elev01 = elev;
+                            st.is_ocean = false;
+                            st.rock = mats[row].rock;
+                            st.soil = mats[row].soil;
+                            st.soil_depth = 0.8f;
+                            st.soil_blend = 0.5f;
+                            st.bedrock_hardness = 0.5f;
+                            st.dist_ocean = 10.0f;
+                            st.roughness = 0.05f;
+                            st.slope01 = slope_val;
+                            st.aspect = 3.14159f * 0.5f;
+                        }
+                    }
+
+                    // Render
+                    int ox = col_idx * (CELL_PX + GAP);
+                    int oy = LABEL_H + row * (CELL_PX + LABEL_H + GAP);
+
+                    SDL_LockSurface(sheet);
+                    auto* dst = static_cast<uint32_t*>(sheet->pixels);
+                    int pitch = sheet->pitch / 4;
+
+                    int n_pure = 0, n_elev = 0;
+                    int n_shallow = 0, n_medium = 0, n_steep = 0;
+                    for (int ty = 0; ty < CELL; ++ty) {
+                        for (int tx = 0; tx < CELL; ++tx) {
+                            auto cls = classify_tile(synth, tx + 1, ty + 1, wl);
+                            if (cls.family == TileFamily::Elevation) {
+                                ++n_elev;
+                                if (cls.grade == TransitionGrade::Shallow) ++n_shallow;
+                                else if (cls.grade == TransitionGrade::Medium) ++n_medium;
+                                else ++n_steep;
+                            } else {
+                                ++n_pure;
+                            }
+                            auto tile_px = generate_tile_texture(synth,
+                                tx + 1, ty + 1, 42, wl);
+                            for (int py = 0; py < PPT; ++py) {
+                                for (int px = 0; px < PPT; ++px) {
+                                    int sx_px = ox + tx * PPT + px;
+                                    int sy_px = oy + ty * PPT + py;
+                                    if (sx_px < IMG_W && sy_px < IMG_H)
+                                        dst[sy_px * pitch + sx_px] =
+                                            tile_px.pixels[py * 16 + px];
+                                }
+                            }
+                        }
+                    }
+                    SDL_UnlockSurface(sheet);
+                    std::cout << "  [" << mats[row].name << "/" << grades[col_idx].name
+                              << "] slope=" << slope_val
+                              << " pure=" << n_pure << " elev=" << n_elev
+                              << " (S=" << n_shallow << " M=" << n_medium
+                              << " St=" << n_steep << ")\n";
+                }
+            }
+
+            std::string grade_fname;
+            for (int ver = 1; ; ++ver) {
+                grade_fname = "tile_grade_comparison_v" + std::to_string(ver) + ".bmp";
+                std::ifstream check(grade_fname);
+                if (!check.good()) break;
+            }
+            SDL_SaveBMP(sheet, grade_fname.c_str());
+            SDL_FreeSurface(sheet);
+            std::cout << "\n[GRADE-COMPARE] " << grade_fname
+                      << " (" << IMG_W << "x" << IMG_H << " px)\n";
+            std::cout << "  Columns: Shallow | Medium | Steep\n";
+            std::cout << "  Rows: " << mats[0].name << " | "
+                      << mats[1].name << " | " << mats[2].name << "\n";
+        }
+
+        // ── Full planetary map render ────────────────────────────────────
+        {
+            // Macro scale: 4 px/tile (full world overview)
+            constexpr int MACRO_PPT = 4;
+            int map_w = static_cast<int>(terrain.width) * MACRO_PPT;
+            int map_h = static_cast<int>(terrain.height) * MACRO_PPT;
+            float world_per_pixel = 1.0f / static_cast<float>(MACRO_PPT);
+
+            std::vector<uint32_t> map_pixels(static_cast<size_t>(map_w * map_h));
+            std::cout << "\n[MAP] Rendering macro map (" << map_w << "x" << map_h
+                      << " @ " << MACRO_PPT << "px/tile)...\n";
+
+            generate_template_atlas(const_cast<TemplateAtlas&>(get_template_atlas()), cfg.seed);
+            render_terrain_region(terrain, 0.0f, 0.0f, world_per_pixel,
+                                  map_w, map_h, cfg.seed, map_pixels.data(), map_w,
+                                  cfg.env.water_level);
+
+            SDL_Surface* map_surf = SDL_CreateRGBSurfaceFrom(
+                map_pixels.data(), map_w, map_h, 32, map_w * 4,
+                0x000000FF, 0x0000FF00, 0x00FF0000, 0xFF000000);
+            std::string map_fname = "tile_map_macro_" + std::to_string(cfg.seed) + ".bmp";
+            SDL_SaveBMP(map_surf, map_fname.c_str());
+            SDL_FreeSurface(map_surf);
+            std::cout << "[MAP] Saved " << map_fname << "\n";
+
+            // Meso scale: 16 px/tile (zoomed into a 32×32 tile region)
+            constexpr int MESO_PPT = 16;
+            constexpr int MESO_TILES = 32;
+            int meso_w = MESO_TILES * MESO_PPT;
+            int meso_h = MESO_TILES * MESO_PPT;
+            // Pick a region with both land and coast
+            int cx = static_cast<int>(terrain.width) / 2;
+            int cy = static_cast<int>(terrain.height) / 2;
+            for (int ty = 0; ty < static_cast<int>(terrain.height); ++ty) {
+                for (int tx = 0; tx < static_cast<int>(terrain.width); ++tx) {
+                    const auto& t = terrain.tile_at(
+                        static_cast<uint32_t>(tx), static_cast<uint32_t>(ty));
+                    if (t.dist_ocean > 0.5f && t.dist_ocean < 6.0f && !t.is_ocean) {
+                        cx = tx; cy = ty;
+                        goto found_coast;
+                    }
+                }
+            }
+            found_coast:
+            int rx = std::max(0, cx - MESO_TILES / 2);
+            int ry = std::max(0, cy - MESO_TILES / 2);
+            rx = std::min(rx, static_cast<int>(terrain.width) - MESO_TILES);
+            ry = std::min(ry, static_cast<int>(terrain.height) - MESO_TILES);
+
+            std::vector<uint32_t> meso_pixels(static_cast<size_t>(meso_w * meso_h));
+            float meso_wpp = 1.0f / static_cast<float>(MESO_PPT);
+            std::cout << "[MAP] Rendering meso map (" << meso_w << "x" << meso_h
+                      << " @ " << MESO_PPT << "px/tile, region " << rx << "," << ry << ")...\n";
+
+            render_terrain_region(terrain, static_cast<float>(rx), static_cast<float>(ry),
+                                  meso_wpp, meso_w, meso_h, cfg.seed, meso_pixels.data(),
+                                  meso_w, cfg.env.water_level);
+
+            SDL_Surface* meso_surf = SDL_CreateRGBSurfaceFrom(
+                meso_pixels.data(), meso_w, meso_h, 32, meso_w * 4,
+                0x000000FF, 0x0000FF00, 0x00FF0000, 0xFF000000);
+            std::string meso_fname = "tile_map_meso_" + std::to_string(cfg.seed) + ".bmp";
+            SDL_SaveBMP(meso_surf, meso_fname.c_str());
+            SDL_FreeSurface(meso_surf);
+            std::cout << "[MAP] Saved " << meso_fname << "\n";
+        }
+
+        SDL_Quit();
+        return 0;
+    }
+
     // SDL2 init (non-headless path)
     if (SDL_Init(SDL_INIT_VIDEO) < 0) {
         std::cerr << "SDL_Init failed: " << SDL_GetError() << "\n";
@@ -481,6 +934,9 @@ int main(int argc, char* argv[]) {
     // Init renderer
     Renderer tile_renderer;
     tile_renderer.init(sdl_renderer);
+
+    // Bake terrain texture cache (3 LOD levels with loading screen)
+    tile_renderer.bake_terrain_cache(terrain, cfg.seed, cfg.env.water_level);
 
     // Camera — start fully zoomed out to show entire world
     Camera cam;
@@ -707,6 +1163,8 @@ int main(int argc, char* argv[]) {
             terrain =
                 generate_terrain(cfg.world_width, cfg.world_height, cfg.env, cfg.seed, &timings);
             stats = compute_stats(terrain);
+            tile_renderer.invalidate_terrain_cache();
+            tile_renderer.bake_terrain_cache(terrain, cfg.seed, cfg.env.water_level);
             std::cout << "[REGEN] seed=" << cfg.seed << " total=" << std::fixed
                       << std::setprecision(1) << timings.total_ms << "ms\n";
             needs_regen = false;
@@ -734,8 +1192,8 @@ int main(int argc, char* argv[]) {
                       << " h=" << std::fixed << std::setprecision(2) << t.elev01
                       << " s=" << std::setprecision(2) << t.slope01
                       << " do=" << std::setprecision(0) << t.dist_ocean
-                      << " fert=" << std::setprecision(2) << t.soil_fertility
-                      << " hold=" << std::setprecision(2) << t.soil_hold;
+                      << " erod=" << std::setprecision(2) << t.erodibility
+                      << " soil_d=" << std::setprecision(2) << t.soil_depth;
             }
 
             if (overlay != OverlayMode::None) {

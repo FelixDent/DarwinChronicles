@@ -41,15 +41,15 @@ SDL_Color precipitation_color(float precip) {
     if (t < 0.5f) {
         // Light sky blue (#6BAED6) → medium blue (#2171B5)
         float s = t * 2.0f;
-        r = static_cast<uint8_t>(107.0f - s * 74.0f);   // 6B → 21
-        g = static_cast<uint8_t>(174.0f - s * 61.0f);   // AE → 71
-        b = static_cast<uint8_t>(214.0f - s * 33.0f);   // D6 → B5
+        r = static_cast<uint8_t>(107.0f - s * 74.0f);  // 6B → 21
+        g = static_cast<uint8_t>(174.0f - s * 61.0f);  // AE → 71
+        b = static_cast<uint8_t>(214.0f - s * 33.0f);  // D6 → B5
     } else {
         // Medium blue (#2171B5) → dark navy (#08306B)
         float s = (t - 0.5f) * 2.0f;
-        r = static_cast<uint8_t>(33.0f - s * 25.0f);    // 21 → 08
-        g = static_cast<uint8_t>(113.0f - s * 65.0f);   // 71 → 30
-        b = static_cast<uint8_t>(181.0f - s * 74.0f);   // B5 → 6B
+        r = static_cast<uint8_t>(33.0f - s * 25.0f);   // 21 → 08
+        g = static_cast<uint8_t>(113.0f - s * 65.0f);  // 71 → 30
+        b = static_cast<uint8_t>(181.0f - s * 74.0f);  // B5 → 6B
     }
     return {r, g, b, 180};
 }
@@ -105,10 +105,10 @@ SDL_Color snow_depth_color(float snow) {
     if (t < 0.01f)
         return {0, 0, 0, 0};
     // Higher base alpha for better visibility; blue tint fades to pure white
-    auto r = static_cast<uint8_t>(220.0f + t * 30.0f);   // 220 → 250
-    auto g = static_cast<uint8_t>(230.0f + t * 18.0f);   // 230 → 248
-    auto b = static_cast<uint8_t>(245.0f + t * 10.0f);   // 245 → 255
-    auto a = static_cast<uint8_t>(60.0f + t * 180.0f);   // 60 → 240
+    auto r = static_cast<uint8_t>(220.0f + t * 30.0f);  // 220 → 250
+    auto g = static_cast<uint8_t>(230.0f + t * 18.0f);  // 230 → 248
+    auto b = static_cast<uint8_t>(245.0f + t * 10.0f);  // 245 → 255
+    auto a = static_cast<uint8_t>(60.0f + t * 180.0f);  // 60 → 240
     return {r, g, b, a};
 }
 
@@ -137,14 +137,14 @@ SDL_Color stability_color(float stab) {
     //          → red (#B40426, stable/inversion, +10)
     // Gamma 0.8 expands contrast in the common range
     float raw = std::clamp((stab + 20.0f) / 30.0f, 0.0f, 1.0f);  // 0=unstable, 1=inversion
-    float t = std::pow(raw, 0.8f);  // gamma for better contrast
+    float t = std::pow(raw, 0.8f);                               // gamma for better contrast
     uint8_t r, g, b;
     if (t < 0.5f) {
         // Blue (#3B4CC0) → near-white (#F7F7F7)
         float s = t * 2.0f;
-        r = static_cast<uint8_t>(59.0f + s * 188.0f);   // 3B → F7
-        g = static_cast<uint8_t>(76.0f + s * 171.0f);   // 4C → F7
-        b = static_cast<uint8_t>(192.0f + s * 55.0f);   // C0 → F7
+        r = static_cast<uint8_t>(59.0f + s * 188.0f);  // 3B → F7
+        g = static_cast<uint8_t>(76.0f + s * 171.0f);  // 4C → F7
+        b = static_cast<uint8_t>(192.0f + s * 55.0f);  // C0 → F7
     } else {
         // Near-white (#F7F7F7) → red (#B40426)
         float s = (t - 0.5f) * 2.0f;
@@ -162,21 +162,21 @@ SDL_Color aridity_color(float aridity) {
     if (t < 0.25f) {
         // Dark purple (#2D1E4F) → blue (#2C7BB6)
         float s = t / 0.25f;
-        r = static_cast<uint8_t>(45.0f + s * -1.0f);    // 2D → 2C
-        g = static_cast<uint8_t>(30.0f + s * 93.0f);    // 1E → 7B
-        b = static_cast<uint8_t>(79.0f + s * 103.0f);   // 4F → B6
+        r = static_cast<uint8_t>(45.0f + s * -1.0f);   // 2D → 2C
+        g = static_cast<uint8_t>(30.0f + s * 93.0f);   // 1E → 7B
+        b = static_cast<uint8_t>(79.0f + s * 103.0f);  // 4F → B6
     } else if (t < 0.5f) {
         // Blue (#2C7BB6) → teal (#2DB87B)
         float s = (t - 0.25f) / 0.25f;
-        r = static_cast<uint8_t>(44.0f + s * 1.0f);     // 2C → 2D
-        g = static_cast<uint8_t>(123.0f + s * 61.0f);   // 7B → B8
-        b = static_cast<uint8_t>(182.0f - s * 59.0f);   // B6 → 7B
+        r = static_cast<uint8_t>(44.0f + s * 1.0f);    // 2C → 2D
+        g = static_cast<uint8_t>(123.0f + s * 61.0f);  // 7B → B8
+        b = static_cast<uint8_t>(182.0f - s * 59.0f);  // B6 → 7B
     } else if (t < 0.75f) {
         // Teal (#2DB87B) → light green (#7FC97F)
         float s = (t - 0.5f) / 0.25f;
-        r = static_cast<uint8_t>(45.0f + s * 82.0f);    // 2D → 7F
-        g = static_cast<uint8_t>(184.0f + s * 17.0f);   // B8 → C9
-        b = static_cast<uint8_t>(123.0f + s * 4.0f);    // 7B → 7F
+        r = static_cast<uint8_t>(45.0f + s * 82.0f);   // 2D → 7F
+        g = static_cast<uint8_t>(184.0f + s * 17.0f);  // B8 → C9
+        b = static_cast<uint8_t>(123.0f + s * 4.0f);   // 7B → 7F
     } else {
         // Light green (#7FC97F) → warm yellow (#FEE08B)
         float s = (t - 0.75f) / 0.25f;
@@ -214,9 +214,9 @@ SDL_Color discharge_color(float discharge) {
     if (t < 0.5f) {
         // Dark teal (#083D5B) → teal (#2AA198)
         float s = t * 2.0f;
-        r = static_cast<uint8_t>(8.0f + s * 34.0f);     // 08 → 2A
-        g = static_cast<uint8_t>(61.0f + s * 100.0f);   // 3D → A1
-        b = static_cast<uint8_t>(91.0f + s * 61.0f);    // 5B → 98
+        r = static_cast<uint8_t>(8.0f + s * 34.0f);    // 08 → 2A
+        g = static_cast<uint8_t>(61.0f + s * 100.0f);  // 3D → A1
+        b = static_cast<uint8_t>(91.0f + s * 61.0f);   // 5B → 98
     } else {
         // Teal (#2AA198) → pale (#F2F7FF)
         float s = (t - 0.5f) * 2.0f;
@@ -529,129 +529,99 @@ struct OverlayInfo {
 static OverlayInfo get_overlay_info(OverlayMode overlay) {
     switch (overlay) {
         case OverlayMode::Temperature:
-            return {{"Solar angle sets base by latitude",
-                     "Lapse rate cools with altitude",
-                     "QG eddies create weather fronts",
-                     "Ocean moderates coastal temps",
-                     "Drives: evaporation, snowmelt,",
-                     "stability, aridity index"}, 6};
+            return {{"Solar angle sets base by latitude", "Lapse rate cools with altitude",
+                     "QG eddies create weather fronts", "Ocean moderates coastal temps",
+                     "Drives: evaporation, snowmelt,", "stability, aridity index"},
+                    6};
         case OverlayMode::Precipitation:
-            return {{"Clouds condense when q > q_sat",
-                     "Rain when cloud > thickness threshold",
-                     "Orographic uplift on mountains",
-                     "Wind carries moisture from ocean",
-                     "Drives: surface water, soil,",
-                     "snow depth, discharge"}, 6};
+            return {{"Clouds condense when q > q_sat", "Rain when cloud > thickness threshold",
+                     "Orographic uplift on mountains", "Wind carries moisture from ocean",
+                     "Drives: surface water, soil,", "snow depth, discharge"},
+                    6};
         case OverlayMode::Moisture:
-            return {{"Ocean evaporation is main source",
-                     "Land evap depends on soil water",
-                     "Wind advects moisture inland",
-                     "Condensation removes humidity",
-                     "Drives: cloud formation, precip,",
-                     "latent heat release"}, 6};
+            return {{"Ocean evaporation is main source", "Land evap depends on soil water",
+                     "Wind advects moisture inland", "Condensation removes humidity",
+                     "Drives: cloud formation, precip,", "latent heat release"},
+                    6};
         case OverlayMode::WindDirection:
-            return {{"QG streamfunction sets upper flow",
-                     "Surface: pressure gradient + Coriolis",
-                     "Trade / westerly / polar cells",
-                     "Terrain roughness increases drag",
-                     "Drives: moisture transport,",
-                     "evaporation rate"}, 6};
+            return {{"QG streamfunction sets upper flow", "Surface: pressure gradient + Coriolis",
+                     "Trade / westerly / polar cells", "Terrain roughness increases drag",
+                     "Drives: moisture transport,", "evaporation rate"},
+                    6};
         case OverlayMode::Evaporation:
-            return {{"Ocean: temp-driven, cloud-limited",
-                     "Land: quadratic soil dependence",
-                     "Blocked below wilting point",
-                     "Removes surface and soil water",
-                     "Adds atmospheric humidity"}, 5};
+            return {{"Ocean: temp-driven, cloud-limited", "Land: quadratic soil dependence",
+                     "Blocked below wilting point", "Removes surface and soil water",
+                     "Adds atmospheric humidity"},
+                    5};
         case OverlayMode::Storminess:
-            return {{"Convergence x instability x humidity",
-                     "High where weather fronts collide",
-                     "Warm ocean enhances instability",
-                     "Subsidence and high-P suppress",
-                     "Drives: intense precipitation,",
-                     "wind gusts"}, 6};
+            return {{"Convergence x instability x humidity", "High where weather fronts collide",
+                     "Warm ocean enhances instability", "Subsidence and high-P suppress",
+                     "Drives: intense precipitation,", "wind gusts"},
+                    6};
         case OverlayMode::MoistureBars:
-            return {{"Bar height = column humidity",
-                     "Taller bars = wetter air mass",
-                     "Shows spatial moisture pattern",
-                     "Quick visual for dry/wet zones"}, 4};
+            return {{"Bar height = column humidity", "Taller bars = wetter air mass",
+                     "Shows spatial moisture pattern", "Quick visual for dry/wet zones"},
+                    4};
         case OverlayMode::RainShadow:
-            return {{"Mountains force windward uplift",
-                     "Leeward air descends and dries",
-                     "Creates persistent arid zones",
-                     "Depends on wind dir + mtn height",
-                     "Interacts: precipitation, aridity"}, 5};
+            return {{"Mountains force windward uplift", "Leeward air descends and dries",
+                     "Creates persistent arid zones", "Depends on wind dir + mtn height",
+                     "Interacts: precipitation, aridity"},
+                    5};
         case OverlayMode::SurfaceWater:
-            return {{"Rain and snowmelt fill surface",
-                     "Drains by infiltration + runoff",
-                     "Evaporates from open surface",
-                     "Pools in flat / low-slope terrain",
-                     "Feeds: soil moisture, discharge,",
-                     "basin lakes via spillway storage"}, 6};
+            return {{"Rain and snowmelt fill surface", "Drains by infiltration + runoff",
+                     "Evaporates from open surface", "Pools in flat / low-slope terrain",
+                     "Feeds: soil moisture, discharge,", "basin lakes via spillway storage"},
+                    6};
         case OverlayMode::SoilMoisture:
-            return {{"Infiltrated from surface water",
-                     "Rate set by geology (ksat)",
-                     "Capped at field capacity",
-                     "Evaporation and plants pull water",
-                     "Drives: land evaporation rate,",
-                     "groundwater recharge"}, 6};
+            return {{"Infiltrated from surface water", "Rate set by geology (ksat)",
+                     "Capped at field capacity", "Evaporation and plants pull water",
+                     "Drives: land evaporation rate,", "groundwater recharge"},
+                    6};
         case OverlayMode::SnowDepth:
-            return {{"Precip falls as snow when T < 0 C",
-                     "Melts above freezing -> water",
-                     "Meltwater adds to surface water",
-                     "Insulates ground temperature",
-                     "Interacts: temperature,",
-                     "surface water, albedo"}, 6};
+            return {{"Precip falls as snow when T < 0 C", "Melts above freezing -> water",
+                     "Meltwater adds to surface water", "Insulates ground temperature",
+                     "Interacts: temperature,", "surface water, albedo"},
+                    6};
         case OverlayMode::PrecipBudget:
-            return {{"Air mass moisture capacity",
-                     "Depleted by precipitation events",
-                     "Recharged slowly over ocean",
-                     "Low budget = exhausted air mass",
-                     "Creates inland dry spells"}, 5};
+            return {{"Air mass moisture capacity", "Depleted by precipitation events",
+                     "Recharged slowly over ocean", "Low budget = exhausted air mass",
+                     "Creates inland dry spells"},
+                    5};
         case OverlayMode::UpperWind:
-            return {{"QG streamfunction gradient",
-                     "Stronger at jet stream latitudes",
-                     "Steers synoptic weather systems",
-                     "Thermal wind from T gradient",
-                     "Interacts: surface wind patterns"}, 5};
+            return {{"QG streamfunction gradient", "Stronger at jet stream latitudes",
+                     "Steers synoptic weather systems", "Thermal wind from T gradient",
+                     "Interacts: surface wind patterns"},
+                    5};
         case OverlayMode::Stability:
-            return {{"T_upper - T_lower vs lapse rate",
-                     "Negative = convective (storms)",
-                     "Positive = inversion (stable)",
-                     "Warm surface + cold aloft = mix",
-                     "Drives: convection, cloud type,",
-                     "precipitation intensity"}, 6};
+            return {{"T_upper - T_lower vs lapse rate", "Negative = convective (storms)",
+                     "Positive = inversion (stable)", "Warm surface + cold aloft = mix",
+                     "Drives: convection, cloud type,", "precipitation intensity"},
+                    6};
         case OverlayMode::Aridity:
-            return {{"Ratio: precipitation / PET",
-                     "Low (<0.2) = desert climate",
-                     "High (>0.65) = humid climate",
-                     "EMA-smoothed over time",
-                     "Driven by: precip, temp, soil"}, 5};
+            return {{"Ratio: precipitation / PET", "Low (<0.2) = desert climate",
+                     "High (>0.65) = humid climate", "EMA-smoothed over time",
+                     "Driven by: precip, temp, soil"},
+                    5};
         case OverlayMode::Groundwater:
-            return {{"Deep infiltration reservoir",
-                     "Filled by drainage from soil",
-                     "Capped at soil_depth x porosity",
-                     "Discharges as river baseflow",
-                     "Controlled by: geology, precip"}, 5};
+            return {{"Deep infiltration reservoir", "Filled by drainage from soil",
+                     "Capped at soil_depth x porosity", "Discharges as river baseflow",
+                     "Controlled by: geology, precip"},
+                    5};
         case OverlayMode::Discharge:
-            return {{"D8 flow accumulation of runoff",
-                     "Quick: storm pulse (tau=0.3 day)",
-                     "Base: perennial flow (tau=10 day)",
-                     "Sqrt/log scaled for visibility",
-                     "Driven by: runoff, groundwater"}, 5};
+            return {{"D8 flow accumulation of runoff", "Quick: storm pulse (tau=0.3 day)",
+                     "Base: perennial flow (tau=10 day)", "Sqrt/log scaled for visibility",
+                     "Driven by: runoff, groundwater"},
+                    5};
         case OverlayMode::Geology:
-            return {{"From tectonic context at gen time",
-                     "Convergent boundaries -> metamorphic",
-                     "Volcanic arcs -> basalt",
-                     "Stable cratons -> granite/sandstone",
-                     "Controls: erosion, infiltration,",
-                     "soil type, bedrock hardness"}, 6};
+            return {{"From tectonic context at gen time", "Convergent boundaries -> metamorphic",
+                     "Volcanic arcs -> basalt", "Stable cratons -> granite/sandstone",
+                     "Controls: erosion, infiltration,", "soil type, bedrock hardness"},
+                    6};
         case OverlayMode::SoilTextureOverlay:
-            return {{"Derived from geology + weathering",
-                     "Sand: fast drain, low retention",
-                     "Clay: slow drain, high retention",
-                     "Peat: organic, high water hold",
-                     "Controls: ksat, field_capacity,",
-                     "wilting_point, erodibility"}, 6};
+            return {{"Derived from geology + weathering", "Sand: fast drain, low retention",
+                     "Clay: slow drain, high retention", "Peat: organic, high water hold",
+                     "Controls: ksat, field_capacity,", "wilting_point, erodibility"},
+                    6};
         default:
             return {{}, 0};
     }
@@ -699,17 +669,15 @@ void render_weather_legend(SDL_Renderer* renderer, const WeatherStats& stats, Ov
         constexpr int N = 8;
         char lines[N][48];
         std::snprintf(lines[0], 48, "WEATHER STATS");
-        std::snprintf(lines[1], 48, "T: %.1f TO %.1f C",
-                      static_cast<double>(stats.temp_min), static_cast<double>(stats.temp_max));
-        std::snprintf(lines[2], 48, "P: %.2f TO %.2f",
-                      static_cast<double>(stats.precip_min), static_cast<double>(stats.precip_max));
-        std::snprintf(lines[3], 48, "M: %.2f TO %.2f",
-                      static_cast<double>(stats.moisture_min),
+        std::snprintf(lines[1], 48, "T: %.1f TO %.1f C", static_cast<double>(stats.temp_min),
+                      static_cast<double>(stats.temp_max));
+        std::snprintf(lines[2], 48, "P: %.2f TO %.2f", static_cast<double>(stats.precip_min),
+                      static_cast<double>(stats.precip_max));
+        std::snprintf(lines[3], 48, "M: %.2f TO %.2f", static_cast<double>(stats.moisture_min),
                       static_cast<double>(stats.moisture_max));
         std::snprintf(lines[4], 48, "E: %.2f TO %.2f", static_cast<double>(stats.evap_min),
                       static_cast<double>(stats.evap_max));
-        std::snprintf(lines[5], 48, "WIND MAX: %.2f",
-                      static_cast<double>(stats.wind_speed_max));
+        std::snprintf(lines[5], 48, "WIND MAX: %.2f", static_cast<double>(stats.wind_speed_max));
         std::snprintf(lines[6], 48, "STORMS: %u", stats.storm_tiles);
         std::snprintf(lines[7], 48, "SHADOWS: %u", stats.rain_shadow_tiles);
 
@@ -741,14 +709,14 @@ void render_weather_legend(SDL_Renderer* renderer, const WeatherStats& stats, Ov
     if (mouse_x >= stats_bounds.x && mouse_x < stats_bounds.x + stats_bounds.w &&
         mouse_y >= stats_bounds.y && mouse_y < stats_bounds.y + stats_bounds.h) {
         static const char* tips[] = {
-            "Static weather bake summary",                                        // 0: WEATHER STATS
-            "Temperature range from baked climate|Based on latitude and lapse rate", // 1: T
-            "Precipitation range from baked climate|From zonal+meridional moisture sweeps", // 2: P
-            "Moisture range (0-1)|From evaporation and precipitation balance",    // 3: M
-            "Evaporation demand range (0-1)|Higher at warm, low-humidity locations", // 4: E
-            "Maximum wind speed from 3-cell model|Trade, westerly, and polar winds", // 5: WIND
-            "Tiles with storminess > threshold|From convergence + instability",   // 6: STORMS
-            "Tiles in rain shadow of mountains|Leeward of orographic barriers",   // 7: SHADOWS
+            "Static weather bake summary",  // 0: WEATHER STATS
+            "Temperature range from baked climate|Based on latitude and lapse rate",         // 1: T
+            "Precipitation range from baked climate|From zonal+meridional moisture sweeps",  // 2: P
+            "Moisture range (0-1)|From evaporation and precipitation balance",               // 3: M
+            "Evaporation demand range (0-1)|Higher at warm, low-humidity locations",         // 4: E
+            "Maximum wind speed from 3-cell model|Trade, westerly, and polar winds",  // 5: WIND
+            "Tiles with storminess > threshold|From convergence + instability",       // 6: STORMS
+            "Tiles in rain shadow of mountains|Leeward of orographic barriers",       // 7: SHADOWS
         };
         int rh = ui::row_height(SCALE);
         int rel_y = mouse_y - stats_content_y;
@@ -845,8 +813,8 @@ void render_weather_legend(SDL_Renderer* renderer, const WeatherStats& stats, Ov
         }
 
         case OverlayMode::Evaporation:
-            draw_gradient_key("EVAPORATION (0-1)", evaporation_color, "0", "1.0", 220, 200, 30,
-                              255, 60, 0, "0.5");
+            draw_gradient_key("EVAPORATION (0-1)", evaporation_color, "0", "1.0", 220, 200, 30, 255,
+                              60, 0, "0.5");
             break;
 
         case OverlayMode::Storminess:
@@ -954,15 +922,15 @@ void render_weather_legend(SDL_Renderer* renderer, const WeatherStats& stats, Ov
         }
 
         case OverlayMode::Groundwater: {
-            draw_gradient_key("GROUNDWATER (M)", groundwater_color, "0", "1.0", 180, 160, 110,
-                              40, 120, 255, "0.3");
+            draw_gradient_key("GROUNDWATER (M)", groundwater_color, "0", "1.0", 180, 160, 110, 40,
+                              120, 255, "0.3");
             break;
         }
 
         case OverlayMode::Discharge: {
             auto discharge_grad = [](float t) -> SDL_Color { return discharge_color(t * 0.05f); };
-            draw_gradient_key("DISCHARGE - SQRT SCALE", discharge_grad, "0", "0.05+", 120, 120,
-                              120, 242, 247, 255, "0.01");
+            draw_gradient_key("DISCHARGE - SQRT SCALE", discharge_grad, "0", "0.05+", 120, 120, 120,
+                              242, 247, 255, "0.01");
             break;
         }
 
@@ -998,8 +966,8 @@ void render_weather_legend(SDL_Renderer* renderer, const WeatherStats& stats, Ov
         }
 
         case OverlayMode::Stability: {
-            draw_gradient_key("STABILITY (K)", stability_gradient_sample, "-20", "+10", 59, 76,
-                              192, 180, 4, 38, "0");
+            draw_gradient_key("STABILITY (K)", stability_gradient_sample, "-20", "+10", 59, 76, 192,
+                              180, 4, 38, "0");
             break;
         }
 
@@ -1088,7 +1056,8 @@ void render_weather_legend(SDL_Renderer* renderer, const WeatherStats& stats, Ov
         int info_y = std::max(ui::SAFE_T, legend_rect.y + legend_rect.h - info_h);
 
         // Don't render if panel would extend past right edge
-        if (info_x + info_w > win_w - ui::SAFE_R) return;
+        if (info_x + info_w > win_w - ui::SAFE_R)
+            return;
 
         ui::Panel info_panel;
         info_panel.bounds = {info_x, info_y, info_w, info_h};
@@ -1126,7 +1095,8 @@ void render_dynamic_legend(SDL_Renderer* renderer, const DynamicStats& stats,
     if (paused)
         std::snprintf(lines[line_count++], 80, "DAY %d  PAUSED", day);
     else
-        std::snprintf(lines[line_count++], 80, "DAY %d  %.1fx", day, static_cast<double>(time_scale));
+        std::snprintf(lines[line_count++], 80, "DAY %d  %.1fx", day,
+                      static_cast<double>(time_scale));
     const char* seasons[] = {"SPRING", "SUMMER", "AUTUMN", "WINTER"};
     int season_idx = static_cast<int>((day_of_year + 10.0f) / 91.25f) % 4;
     int hour = static_cast<int>(time_of_day);
@@ -1184,14 +1154,10 @@ void render_dynamic_legend(SDL_Renderer* renderer, const DynamicStats& stats,
     // Use template strings with maximum-length values so the panel never resizes.
     static const int fixed_text_w = [] {
         const char* templates[] = {
-            "ARIDITY: 0.00  A:99999 H:99999",
-            "SW: 0.0000  MAX: 00.0000",
-            "SNOW: 99999  FLOODED: 9999",
-            "ENERGY DRIFT: -000.00%",
-            "BUDGET: 0.00-0.00 (0.00)",
-            "PRECIP: 0.000 MAX 0.000",
-            "UPPER: T=-00 W=00.0 S=-00",
-            "H2O: 0000.0 CFL: 00.00",
+            "ARIDITY: 0.00  A:99999 H:99999", "SW: 0.0000  MAX: 00.0000",
+            "SNOW: 99999  FLOODED: 9999",     "ENERGY DRIFT: -000.00%",
+            "BUDGET: 0.00-0.00 (0.00)",       "PRECIP: 0.000 MAX 0.000",
+            "UPPER: T=-00 W=00.0 S=-00",      "H2O: 0000.0 CFL: 00.00",
             "RAIN 9999  CLOUDY 9999",
         };
         int w = 0;
@@ -1269,25 +1235,28 @@ void render_dynamic_legend(SDL_Renderer* renderer, const DynamicStats& stats,
         mouse_y >= panel.bounds.y && mouse_y < panel.bounds.y + panel.bounds.h) {
         // Tooltip descriptions per line index
         static const char* tips[] = {
-            "Dynamic simulation status",                                          // 0: DYNAMICS
-            "Simulation day and speed multiplier",                                // 1: DAY N  Nx
-            "Current season and time of day",                                     // 2: SEASON HH:MM
-            "Mean and max surface water depth (m)|Standing water on terrain",     // 3: SW
-            "Mean soil moisture (0-1 of field capacity)|Water held in soil",      // 4: SOIL
-            "Tiles with snow cover / standing water",                             // 5: SNOW FLOODED
-            "Aridity index (precip/evap)|A=arid tiles  H=humid tiles",           // 6: ARIDITY
-            "Mean groundwater depth / max discharge|Subsurface water + river flow", // 7: GW DISCH
-            "Atmosphere simulation state",                                        // 8: ATMOSPHERE
-            "Temperature min / mean / max (Celsius)",                             // 9: T
-            "Mean specific humidity and cloud cover",                             // 10: Q CLOUD
-            "Mean and max precipitation rate (mm/day)",                           // 11: PRECIP
-            "Count of raining and cloudy atmo cells",                             // 12: RAIN CLOUDY
-            "Mean and max wind speed (cells/day)",                                // 13: WIND
-            "Upper troposphere: temp, wind, stability|Negative stability = convective",  // 14: UPPER
-            "Simulation health diagnostics",                                      // 15: INVARIANTS
-            "Total atmospheric water / Courant number|CFL > 1.0 = advection instability", // 16: H2O CFL
-            "Precipitation budget range and mean|Tracks air mass moisture capacity",      // 17: BUDGET
-            "Energy drift from initial state|Seasonal oscillation is normal",     // 18: ENERGY
+            "Dynamic simulation status",                                       // 0: DYNAMICS
+            "Simulation day and speed multiplier",                             // 1: DAY N  Nx
+            "Current season and time of day",                                  // 2: SEASON HH:MM
+            "Mean and max surface water depth (m)|Standing water on terrain",  // 3: SW
+            "Mean soil moisture (0-1 of field capacity)|Water held in soil",   // 4: SOIL
+            "Tiles with snow cover / standing water",                          // 5: SNOW FLOODED
+            "Aridity index (precip/evap)|A=arid tiles  H=humid tiles",         // 6: ARIDITY
+            "Mean groundwater depth / max discharge|Subsurface water + river flow",  // 7: GW DISCH
+            "Atmosphere simulation state",               // 8: ATMOSPHERE
+            "Temperature min / mean / max (Celsius)",    // 9: T
+            "Mean specific humidity and cloud cover",    // 10: Q CLOUD
+            "Mean and max precipitation rate (mm/day)",  // 11: PRECIP
+            "Count of raining and cloudy atmo cells",    // 12: RAIN CLOUDY
+            "Mean and max wind speed (cells/day)",       // 13: WIND
+            "Upper troposphere: temp, wind, stability|Negative stability = convective",  // 14:
+                                                                                         // UPPER
+            "Simulation health diagnostics",  // 15: INVARIANTS
+            "Total atmospheric water / Courant number|CFL > 1.0 = advection instability",  // 16:
+                                                                                           // H2O
+                                                                                           // CFL
+            "Precipitation budget range and mean|Tracks air mass moisture capacity",  // 17: BUDGET
+            "Energy drift from initial state|Seasonal oscillation is normal",         // 18: ENERGY
         };
 
         int content_y = cr.y;
@@ -1298,7 +1267,8 @@ void render_dynamic_legend(SDL_Renderer* renderer, const DynamicStats& stats,
         int y_offset = 0;
         int hovered_line = -1;
         for (int i = 0; i < line_count; ++i) {
-            if (i == 3 || i == 8 || i == 15) y_offset += ui::separator_height();
+            if (i == 3 || i == 8 || i == 15)
+                y_offset += ui::separator_height();
             int row_top = i * row_h + y_offset;
             if (rel_y >= row_top && rel_y < row_top + row_h) {
                 hovered_line = i;
@@ -1314,8 +1284,8 @@ void render_dynamic_legend(SDL_Renderer* renderer, const DynamicStats& stats,
 
 // ── Tile inspector ──────────────────────────────────────────────────────────
 
-void render_tile_inspector(SDL_Renderer* renderer, int tile_x, int tile_y, int mouse_x,
-                           int mouse_y, const Terrain& terrain, const DynamicState& dynamics,
+void render_tile_inspector(SDL_Renderer* renderer, int tile_x, int tile_y, int mouse_x, int mouse_y,
+                           const Terrain& terrain, const DynamicState& dynamics,
                            const AtmosphereState& atmosphere, int win_w, int win_h) {
     if (tile_x < 0 || tile_y < 0 || tile_x >= static_cast<int>(terrain.width) ||
         tile_y >= static_cast<int>(terrain.height))
@@ -1438,10 +1408,14 @@ void render_tile_inspector(SDL_Renderer* renderer, int tile_x, int tile_y, int m
     int px = mouse_x + CURSOR_OFFSET;
     int py = mouse_y + CURSOR_OFFSET;
 
-    if (px + panel_w > win_w - ui::SAFE_R) px = mouse_x - panel_w - CURSOR_OFFSET;
-    if (py + panel_h > win_h - ui::SAFE_B) py = mouse_y - panel_h - CURSOR_OFFSET;
-    if (px < ui::SAFE_L) px = ui::SAFE_L;
-    if (py < ui::SAFE_T) py = ui::SAFE_T;
+    if (px + panel_w > win_w - ui::SAFE_R)
+        px = mouse_x - panel_w - CURSOR_OFFSET;
+    if (py + panel_h > win_h - ui::SAFE_B)
+        py = mouse_y - panel_h - CURSOR_OFFSET;
+    if (px < ui::SAFE_L)
+        px = ui::SAFE_L;
+    if (py < ui::SAFE_T)
+        py = ui::SAFE_T;
 
     // ── Draw ───────────────────────────────────────────────────────────
     ui::Panel panel;

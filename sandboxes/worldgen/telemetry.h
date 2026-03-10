@@ -10,6 +10,11 @@
 
 namespace sandbox {
 
+// Forward-declare text utilities (defined in telemetry.cpp, used by renderer.cpp)
+void draw_text(SDL_Renderer* renderer, int x, int y, const char* text, int scale, uint8_t r,
+               uint8_t g, uint8_t b);
+int text_pixel_width(const char* text, int scale);
+
 // ── Overlay modes ───────────────────────────────────────────────────────────
 
 enum class OverlayMode {
@@ -35,8 +40,8 @@ SDL_Color slope_color(float s);
 SDL_Color elevband_color(ElevBand band);
 SDL_Color dist_color(float dist, float max_dist);
 SDL_Color aspect_color(float aspect);
-SDL_Color fertility_color(float fertility);
-SDL_Color soil_hold_color(float hold);
+SDL_Color erodibility_color(float erodibility);
+SDL_Color soil_depth_color(float depth);
 
 // ── Terrain statistics ──────────────────────────────────────────────────────
 
@@ -51,9 +56,9 @@ struct TerrainStats {
     float dist_ocean_max = 0.0f;
     float roughness_min = 0.0f, roughness_max = 0.0f, roughness_mean = 0.0f;
 
-    // Soil stats
-    float fertility_mean = 0.0f;
-    float soil_hold_mean = 0.0f;
+    // Geology stats
+    float erodibility_mean = 0.0f;
+    float soil_depth_mean = 0.0f;
 };
 
 TerrainStats compute_stats(const Terrain& world);

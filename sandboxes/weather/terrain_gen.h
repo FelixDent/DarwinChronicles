@@ -67,7 +67,7 @@ struct TerrainTile {
 
     // --- Regolith/soil (root zone) ---
     SoilTexture soil = SoilTexture::Loam;
-    float soil_blend = 0.5f;  // [0..1] continuous noise for smooth soil color blending
+    float soil_blend = 0.5f;       // [0..1] continuous noise for smooth soil color blending
     float soil_depth = 0.5f;       // [0..3] meters
     float porosity = 0.45f;        // [0.25..0.65] void fraction
     float ksat = 5e-6f;            // saturated hydraulic conductivity (m/s)

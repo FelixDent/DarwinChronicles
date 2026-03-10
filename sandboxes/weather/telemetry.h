@@ -61,14 +61,14 @@ void render_weather_legend(SDL_Renderer* renderer, const WeatherStats& stats, Ov
 void render_dynamic_legend(SDL_Renderer* renderer, const DynamicStats& stats,
                            const AtmosphereStats& atmo_stats, float elapsed_days, float time_scale,
                            bool paused, OverlayMode overlay, int win_w, int win_h,
-                           float time_of_day = 12.0f, float day_of_year = 80.0f,
-                           int mouse_x = -1, int mouse_y = -1);
+                           float time_of_day = 12.0f, float day_of_year = 80.0f, int mouse_x = -1,
+                           int mouse_y = -1);
 
 void render_grid(SDL_Renderer* renderer, uint32_t world_w, uint32_t world_h, const Camera& cam,
                  int win_w, int win_h, int tile_size);
 
-void render_tile_inspector(SDL_Renderer* renderer, int tile_x, int tile_y, int mouse_x,
-                           int mouse_y, const Terrain& terrain, const DynamicState& dynamics,
+void render_tile_inspector(SDL_Renderer* renderer, int tile_x, int tile_y, int mouse_x, int mouse_y,
+                           const Terrain& terrain, const DynamicState& dynamics,
                            const AtmosphereState& atmosphere, int win_w, int win_h);
 
 // ── Bitmap font ─────────────────────────────────────────────────────────────

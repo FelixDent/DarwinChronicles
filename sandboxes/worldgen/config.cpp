@@ -111,6 +111,12 @@ SandboxConfig parse_args(int argc, char* argv[]) {
             cfg.world_height = static_cast<uint32_t>(std::stoul(next()));
         } else if (arg == "--headless") {
             cfg.headless = true;
+        } else if (arg == "--tile-test") {
+            cfg.tile_test = true;
+            // Optional: --tile-test 64 sets ppt
+            if (i + 1 < argc && argv[i + 1][0] != '-') {
+                cfg.tile_test_ppt = std::stoi(next());
+            }
         } else if (arg == "--preset") {
             cfg.preset = next();
         } else if (arg == "--water-level") {

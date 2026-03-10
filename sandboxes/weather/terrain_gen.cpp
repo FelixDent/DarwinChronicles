@@ -769,8 +769,7 @@ static void generate_tectonic_terrain(std::vector<float>& height_field,
             // corridors perpendicular to strike) create cross-cutting valleys.
             float along_strike = btx * wx + bty * wy;  // warped coords, consistent with ridge noise
             // Broad segmentation: valleys between major range segments
-            float strike_broad =
-                crust_noise.GetNoise(along_strike * 0.005f, bd * 0.01f);
+            float strike_broad = crust_noise.GetNoise(along_strike * 0.005f, bd * 0.01f);
             // Transfer fault corridors: perpendicular to strike, sharp and narrow.
             // Real orogens have transform offsets every 200-500km (San Andreas,
             // Alpine Fault, Dead Sea Transform). These create deep transverse
@@ -779,7 +778,9 @@ static void generate_tectonic_terrain(std::vector<float>& height_field,
             float transfer_noise =
                 detail_noise.GetNoise(along_strike * 0.008f, across_strike * 0.003f);
             // Lower threshold = more frequent gaps; steeper ramp = sharper corridors
-            float transfer_gap = (transfer_noise > 0.40f) ? std::clamp((transfer_noise - 0.40f) * 3.5f, 0.0f, 0.70f) : 0.0f;
+            float transfer_gap = (transfer_noise > 0.40f)
+                                     ? std::clamp((transfer_noise - 0.40f) * 3.5f, 0.0f, 0.70f)
+                                     : 0.0f;
             // Combined: broad segments create 20-80% uplift variation + transfer faults
             float strike_mod = 0.20f + 0.80f * std::clamp(strike_broad * 0.5f + 0.5f, 0.0f, 1.0f);
             strike_mod *= (1.0f - transfer_gap);
@@ -818,14 +819,17 @@ static void generate_tectonic_terrain(std::vector<float>& height_field,
                         float d = bd - sheet_dist[s];
                         float env_s = std::exp(-d * d / (sheet_sigma[s] * sheet_sigma[s]));
                         // Each sheet gets its own ridge modulation (offset noise phase)
-                        float sheet_ridge = 0.15f + 0.85f * std::max(0.0f,
-                            ridge_noise.GetNoise(
-                                ridge_x * env.noise_scale * (1.0f + s * 0.3f),
-                                ridge_y * env.noise_scale * (1.0f + s * 0.15f)));
-                        float sheet_uplift = MOUNTAIN_PEAK * sheet_amp[s] * strength *
-                                             env_s * sheet_ridge;
+                        float sheet_ridge =
+                            0.15f +
+                            0.85f *
+                                std::max(0.0f, ridge_noise.GetNoise(
+                                                   ridge_x * env.noise_scale * (1.0f + s * 0.3f),
+                                                   ridge_y * env.noise_scale * (1.0f + s * 0.15f)));
+                        float sheet_uplift =
+                            MOUNTAIN_PEAK * sheet_amp[s] * strength * env_s * sheet_ridge;
                         total_uplift += sheet_uplift;
-                        if (s == 0) max_rv = env_s * strength;
+                        if (s == 0)
+                            max_rv = env_s * strength;
                     }
                     boundary_uplift = total_uplift;
                     rv = max_rv;
@@ -840,7 +844,8 @@ static void generate_tectonic_terrain(std::vector<float>& height_field,
                     // Andes: Western Cordillera (volcanic) + Eastern Cordillera
                     //        + Altiplano between them.
                     float offset_bd = bd;
-                    if (!a_cont) offset_bd += 8.0f;
+                    if (!a_cont)
+                        offset_bd += 8.0f;
 
                     // Primary volcanic arc: narrow, high, near the trench
                     float arc1_env = std::exp(-offset_bd * offset_bd / (12.0f * 12.0f));
@@ -849,10 +854,10 @@ static void generate_tectonic_terrain(std::vector<float>& height_field,
                     // Secondary range: broader, lower, further inland
                     float d2 = offset_bd - 25.0f;
                     float arc2_env = std::exp(-d2 * d2 / (15.0f * 15.0f));
-                    float arc2_ridge = 0.15f + 0.85f * std::max(0.0f,
-                        ridge_noise.GetNoise(
-                            ridge_x * env.noise_scale * 1.4f,
-                            ridge_y * env.noise_scale * 0.8f));
+                    float arc2_ridge =
+                        0.15f + 0.85f * std::max(0.0f, ridge_noise.GetNoise(
+                                                           ridge_x * env.noise_scale * 1.4f,
+                                                           ridge_y * env.noise_scale * 0.8f));
                     float arc2 = MOUNTAIN_PEAK * 0.65f * strength * arc2_env * arc2_ridge;
 
                     boundary_uplift = arc1 + arc2;
@@ -966,8 +971,8 @@ static void generate_tectonic_terrain(std::vector<float>& height_field,
                 // - Micro-relief: ~2-3 tile wavelength, eliminates flat ridge crests
                 float thrust_sheet = meso_ridge_noise.GetNoise(fx * 0.06f, fy * 0.06f);
                 float secondary = meso_ridge_noise.GetNoise(fx * 0.12f, fy * 0.12f);
-                float fracture = detail_noise.GetNoise(fx * env.noise_scale * 6.0f,
-                                                        fy * env.noise_scale * 6.0f);
+                float fracture =
+                    detail_noise.GetNoise(fx * env.noise_scale * 6.0f, fy * env.noise_scale * 6.0f);
                 // Micro-relief: very high frequency noise at 2-3 tile scale ensures
                 // no flat areas remain on ridge crests or valley floors. Models
                 // outcrop-scale variation: boulders, small cliffs, talus chutes.
@@ -975,10 +980,10 @@ static void generate_tectonic_terrain(std::vector<float>& height_field,
                 float micro1 = detail_noise.GetNoise(fx * 0.35f, fy * 0.35f);
                 float micro2 = detail_noise.GetNoise(fx * 0.50f, fy * 0.45f);
 
-                float mtn_detail = thrust_sheet * 0.20f   // major ridges/valleys
-                                 + secondary * 0.16f      // secondary folds
-                                 + fracture * 0.10f       // fracture zones
-                                 + (micro1 + micro2) * 0.04f;  // micro-relief
+                float mtn_detail = thrust_sheet * 0.20f          // major ridges/valleys
+                                   + secondary * 0.16f           // secondary folds
+                                   + fracture * 0.10f            // fracture zones
+                                   + (micro1 + micro2) * 0.04f;  // micro-relief
                 detail_contrib += mtn_detail * mountain_boost;
             }
 
@@ -994,7 +999,6 @@ static void generate_tectonic_terrain(std::vector<float>& height_field,
             float final_h = base + boundary_uplift + detail_contrib - edge_falloff * 0.4f;
             height_field[idx] = std::clamp(final_h, 0.0f, 1.0f);
             ridge_field[idx] = std::clamp(rv, 0.0f, 1.0f);
-
         }
     }
 
@@ -1088,10 +1092,10 @@ static void generate_tectonic_terrain(std::vector<float>& height_field,
     // Few iterations — this is just pre-conditioning for stream-power.
     // Mountain rock (metamorphic/granite) supports steeper angles than
     // lowland sediment, so talus angle is elevation-dependent.
-    constexpr int EROSION_ITERS = 2;             // minimal pre-conditioning only
-    constexpr float THERMAL_RATE = 0.08f;        // gentle per-step
-    constexpr float MAX_STABLE_LOW = 0.05f;      // lowland talus angle
-    constexpr float MAX_STABLE_HIGH = 0.15f;     // mountain rock holds steeper angles
+    constexpr int EROSION_ITERS = 2;          // minimal pre-conditioning only
+    constexpr float THERMAL_RATE = 0.08f;     // gentle per-step
+    constexpr float MAX_STABLE_LOW = 0.05f;   // lowland talus angle
+    constexpr float MAX_STABLE_HIGH = 0.15f;  // mountain rock holds steeper angles
 
     std::vector<float> eroded(height_field);
     std::vector<float> temp_buf(total);
@@ -1170,7 +1174,8 @@ static void generate_tectonic_terrain(std::vector<float>& height_field,
                 // Skip mountains: sediment deposits in lowlands, not steep valleys
                 float mtn = std::clamp((elev - 0.50f) * 4.0f, 0.0f, 1.0f);
                 float blend = 0.12f * (1.0f - mtn);  // 12% in lowlands, 0% in mountains
-                if (blend < 0.01f) continue;
+                if (blend < 0.01f)
+                    continue;
                 float sum = eroded[idx] * 4.0f;
                 sum += eroded[idx - 1] + eroded[idx + 1];
                 sum += eroded[idx - w] + eroded[idx + w];
@@ -1272,9 +1277,9 @@ static void generate_tectonic_terrain(std::vector<float>& height_field,
         dissect_fine.SetFractalOctaves(2);
         dissect_fine.SetFrequency(0.20f);  // ~5-tile cirques
 
-        constexpr float DISSECT_MAX = 0.14f;       // max incision depth (channels)
-        constexpr float FLAT_THRESHOLD = 0.018f;    // gradient below this = "flat"
-        constexpr float FLOW_SCALE = 40.0f;         // A0 normalization for flow weighting
+        constexpr float DISSECT_MAX = 0.14f;      // max incision depth (channels)
+        constexpr float FLAT_THRESHOLD = 0.018f;  // gradient below this = "flat"
+        constexpr float FLOW_SCALE = 40.0f;       // A0 normalization for flow weighting
         constexpr int DISSECT_ITERS = 4;
 
         std::vector<size_t> d_flow_to(total);
@@ -1291,7 +1296,8 @@ static void generate_tectonic_terrain(std::vector<float>& height_field,
                     float steepest = 0.0f;
                     for (int dy = -1; dy <= 1; ++dy) {
                         for (int dx = -1; dx <= 1; ++dx) {
-                            if (dx == 0 && dy == 0) continue;
+                            if (dx == 0 && dy == 0)
+                                continue;
                             size_t nidx = static_cast<size_t>(y + dy) * w + (x + dx);
                             float dist = (dx != 0 && dy != 0) ? 1.414f : 1.0f;
                             float sl = (center - eroded[nidx]) / dist;
@@ -1328,14 +1334,17 @@ static void generate_tectonic_terrain(std::vector<float>& height_field,
             for (uint32_t y = 1; y + 1 < h; ++y) {
                 for (uint32_t x = 1; x + 1 < w; ++x) {
                     size_t idx = static_cast<size_t>(y) * w + x;
-                    if (eroded[idx] < env.water_level + 0.05f) continue;
+                    if (eroded[idx] < env.water_level + 0.05f)
+                        continue;
 
                     float fx = static_cast<float>(x);
                     float fy = static_cast<float>(y);
 
                     // Flatness factor
-                    float flatness = std::clamp(1.0f - local_grad[idx] / FLAT_THRESHOLD, 0.0f, 1.0f);
-                    if (flatness < 0.05f) continue;
+                    float flatness =
+                        std::clamp(1.0f - local_grad[idx] / FLAT_THRESHOLD, 0.0f, 1.0f);
+                    if (flatness < 0.05f)
+                        continue;
 
                     // Elevation factor
                     float elev_above = eroded[idx] - env.water_level;
@@ -1344,7 +1353,8 @@ static void generate_tectonic_terrain(std::vector<float>& height_field,
                     // Flow factor: channels erode MUCH more than divides (dendritic pattern).
                     // Using log1p for gradual hierarchy: A=1→0, A=50→0.56, A=200→0.76, A=1000→1.0
                     // Low floor (0.08) keeps interfluves mostly intact while channels carve deep.
-                    float flow_factor = std::clamp(std::log1p(d_flow[idx]) / std::log1p(FLOW_SCALE * 20.0f), 0.0f, 1.0f);
+                    float flow_factor = std::clamp(
+                        std::log1p(d_flow[idx]) / std::log1p(FLOW_SCALE * 20.0f), 0.0f, 1.0f);
                     flow_factor = 0.08f + 0.92f * flow_factor;
 
                     // Noise-guided incision (lithologic weakness patterns)
@@ -1367,15 +1377,16 @@ static void generate_tectonic_terrain(std::vector<float>& height_field,
     // Physical basis: Himalayas incision ~4mm/yr, Colorado Plateau ~0.3mm/yr.
     {
         constexpr int SPL_ITERS = 60;
-        constexpr float K_FLUVIAL = 0.0007f;          // erodibility coefficient (slightly lower to compensate higher m)
-        constexpr float M_EXP = 0.6f;                 // drainage area exponent (higher = trunk rivers dominate)
-        constexpr float N_EXP = 1.0f;                 // slope exponent
-        constexpr float K_DEPOSIT = 0.3f;             // deposition rate
-        constexpr float K_THERMAL = 0.02f;            // landslide threshold rate
-        constexpr float TALUS_SLOPE_LOW = 0.04f;      // lowland talus angle
-        constexpr float TALUS_SLOPE_HIGH = 0.14f;     // hard rock stability limit
-        constexpr float MAX_INCISION = 0.008f;        // per-step incision cap
-        constexpr float SED_CAPACITY_COEFF = 0.01f;   // transport capacity coefficient
+        constexpr float K_FLUVIAL =
+            0.0007f;  // erodibility coefficient (slightly lower to compensate higher m)
+        constexpr float M_EXP = 0.6f;  // drainage area exponent (higher = trunk rivers dominate)
+        constexpr float N_EXP = 1.0f;  // slope exponent
+        constexpr float K_DEPOSIT = 0.3f;            // deposition rate
+        constexpr float K_THERMAL = 0.02f;           // landslide threshold rate
+        constexpr float TALUS_SLOPE_LOW = 0.04f;     // lowland talus angle
+        constexpr float TALUS_SLOPE_HIGH = 0.14f;    // hard rock stability limit
+        constexpr float MAX_INCISION = 0.008f;       // per-step incision cap
+        constexpr float SED_CAPACITY_COEFF = 0.01f;  // transport capacity coefficient
 
         // Pre-allocate buffers
         std::vector<size_t> flow_to(total);
@@ -1561,11 +1572,11 @@ static void generate_tectonic_terrain(std::vector<float>& height_field,
     // Gated by slope < threshold AND elevation > threshold to avoid touching
     // already-incised terrain or lowlands.
     {
-        constexpr float MICRO_K = 0.00025f;    // erodibility (gentle)
-        constexpr float MICRO_M = 0.85f;       // high area exponent → strong hierarchy
+        constexpr float MICRO_K = 0.00025f;  // erodibility (gentle)
+        constexpr float MICRO_M = 0.85f;     // high area exponent → strong hierarchy
         constexpr float MICRO_N = 1.0f;
-        constexpr float SLOPE_GATE = 0.04f;    // only affect low-slope areas
-        constexpr float ELEV_GATE = 0.55f;     // only affect highlands
+        constexpr float SLOPE_GATE = 0.04f;  // only affect low-slope areas
+        constexpr float ELEV_GATE = 0.55f;   // only affect highlands
         constexpr float MAX_MICRO_INCISION = 0.004f;
         constexpr int MICRO_ITERS = 15;
 
@@ -1583,11 +1594,15 @@ static void generate_tectonic_terrain(std::vector<float>& height_field,
                     float steepest = 0.0f;
                     for (int dy = -1; dy <= 1; ++dy) {
                         for (int dx = -1; dx <= 1; ++dx) {
-                            if (dx == 0 && dy == 0) continue;
+                            if (dx == 0 && dy == 0)
+                                continue;
                             size_t nidx = static_cast<size_t>(y + dy) * w + (x + dx);
                             float dist = (dx != 0 && dy != 0) ? 1.414f : 1.0f;
                             float sl = (center - eroded[nidx]) / dist;
-                            if (sl > steepest) { steepest = sl; mflow_to[idx] = nidx; }
+                            if (sl > steepest) {
+                                steepest = sl;
+                                mflow_to[idx] = nidx;
+                            }
                         }
                     }
                 }
@@ -1598,7 +1613,8 @@ static void generate_tectonic_terrain(std::vector<float>& height_field,
             std::sort(morder.begin(), morder.end(),
                       [&](size_t a, size_t b) { return eroded[a] > eroded[b]; });
             for (size_t idx : morder) {
-                if (mflow_to[idx] != SIZE_MAX) mflow[mflow_to[idx]] += mflow[idx];
+                if (mflow_to[idx] != SIZE_MAX)
+                    mflow[mflow_to[idx]] += mflow[idx];
             }
 
             // Incise only flat highlands
@@ -1606,22 +1622,26 @@ static void generate_tectonic_terrain(std::vector<float>& height_field,
             for (size_t idx : morder) {
                 auto x = static_cast<uint32_t>(idx % w);
                 auto y = static_cast<uint32_t>(idx / w);
-                if (x == 0 || x >= w - 1 || y == 0 || y >= h - 1) continue;
-                if (eroded[idx] < env.water_level + ELEV_GATE - env.water_level) continue;
+                if (x == 0 || x >= w - 1 || y == 0 || y >= h - 1)
+                    continue;
+                if (eroded[idx] < env.water_level + ELEV_GATE - env.water_level)
+                    continue;
                 // Compute local slope
                 float local_grad = 0.0f;
                 for (int dy = -1; dy <= 1; ++dy) {
                     for (int dx = -1; dx <= 1; ++dx) {
-                        if (dx == 0 && dy == 0) continue;
+                        if (dx == 0 && dy == 0)
+                            continue;
                         float diff = std::abs(eroded[idx] -
-                            eroded[static_cast<size_t>(y + dy) * w + (x + dx)]);
+                                              eroded[static_cast<size_t>(y + dy) * w + (x + dx)]);
                         local_grad = std::max(local_grad, diff);
                     }
                 }
                 // Gate: only dissect flat highlands
                 float slope_factor = std::clamp(1.0f - local_grad / SLOPE_GATE, 0.0f, 1.0f);
                 float elev_factor = std::clamp((eroded[idx] - ELEV_GATE) / 0.15f, 0.0f, 1.0f);
-                if (slope_factor < 0.05f || elev_factor < 0.05f) continue;
+                if (slope_factor < 0.05f || elev_factor < 0.05f)
+                    continue;
 
                 size_t ds = mflow_to[idx];
                 float ds_slope = 0.0f;
@@ -1629,13 +1649,14 @@ static void generate_tectonic_terrain(std::vector<float>& height_field,
                     auto dsx = static_cast<uint32_t>(ds % w);
                     auto dsy = static_cast<uint32_t>(ds / w);
                     float dist = (std::abs(static_cast<int>(dsx) - static_cast<int>(x)) +
-                                  std::abs(static_cast<int>(dsy) - static_cast<int>(y)) > 1)
-                                     ? 1.414f : 1.0f;
+                                      std::abs(static_cast<int>(dsy) - static_cast<int>(y)) >
+                                  1)
+                                     ? 1.414f
+                                     : 1.0f;
                     ds_slope = std::max(0.0f, (eroded[idx] - eroded[ds]) / dist);
                 }
-                float erosion = MICRO_K * std::pow(mflow[idx], MICRO_M)
-                              * std::pow(ds_slope, MICRO_N)
-                              * slope_factor * elev_factor;
+                float erosion = MICRO_K * std::pow(mflow[idx], MICRO_M) *
+                                std::pow(ds_slope, MICRO_N) * slope_factor * elev_factor;
                 erosion = std::min(erosion, MAX_MICRO_INCISION);
                 temp_buf[idx] -= erosion;
             }
@@ -1684,7 +1705,7 @@ static void generate_tectonic_terrain(std::vector<float>& height_field,
         // NOT in steep mountain valleys where the stream has high transport capacity.
         // Previous version smoothed all high-flow cells, destroying mountain valley walls.
         constexpr float VALLEY_SMOOTH_THRESHOLD = 200.0f;  // higher threshold
-        constexpr float VALLEY_SLOPE_MAX = 0.025f;  // only smooth where slope < this
+        constexpr float VALLEY_SLOPE_MAX = 0.025f;         // only smooth where slope < this
         std::copy(eroded.begin(), eroded.end(), temp_buf.begin());
         for (uint32_t vy = 1; vy < h - 1; ++vy) {
             for (uint32_t vx = 1; vx < w - 1; ++vx) {
@@ -1695,14 +1716,16 @@ static void generate_tectonic_terrain(std::vector<float>& height_field,
                 float max_slope = 0.0f;
                 for (int dy = -1; dy <= 1; ++dy) {
                     for (int dx = -1; dx <= 1; ++dx) {
-                        if (dx == 0 && dy == 0) continue;
+                        if (dx == 0 && dy == 0)
+                            continue;
                         float diff = std::abs(eroded[vidx] -
-                            eroded[static_cast<size_t>(vy + dy) * w + (vx + dx)]);
+                                              eroded[static_cast<size_t>(vy + dy) * w + (vx + dx)]);
                         max_slope = std::max(max_slope, diff);
                     }
                 }
                 // Only smooth low-gradient depositional zones
-                if (max_slope > VALLEY_SLOPE_MAX) continue;
+                if (max_slope > VALLEY_SLOPE_MAX)
+                    continue;
 
                 float smooth_t =
                     std::clamp((vflow[vidx] - VALLEY_SMOOTH_THRESHOLD) / 400.0f, 0.0f, 0.5f);
@@ -1784,12 +1807,15 @@ static void generate_tectonic_terrain(std::vector<float>& height_field,
                 auto yi = static_cast<uint32_t>(idx / w);
                 for (int dy = -1; dy <= 1; ++dy) {
                     for (int dx = -1; dx <= 1; ++dx) {
-                        if (dx == 0 && dy == 0) continue;
+                        if (dx == 0 && dy == 0)
+                            continue;
                         auto nx = static_cast<uint32_t>(static_cast<int>(xi) + dx);
                         auto ny = static_cast<uint32_t>(static_cast<int>(yi) + dy);
-                        if (nx >= w || ny >= h) continue;
+                        if (nx >= w || ny >= h)
+                            continue;
                         size_t nidx = static_cast<size_t>(ny) * w + nx;
-                        if (eroded[nidx] < env.water_level) continue;
+                        if (eroded[nidx] < env.water_level)
+                            continue;
                         // Only widen if neighbor is higher (don't fill valleys)
                         if (eroded[nidx] > eroded[idx]) {
                             float nbr_lower = std::min(widen_depth, eroded[nidx] - eroded[idx]);
@@ -3934,9 +3960,8 @@ static void compute_geology(
             soil_tex_field[idx] = soil;
             // Store continuous blend value for smooth rendering transitions
             // Mix of rock noise + height + slope to give spatial continuity
-            soil_blend_field[idx] =
-                std::clamp(rn_combined * 0.4f + heights[idx] * 0.3f + (1.0f - slope) * 0.3f, 0.0f,
-                           1.0f);
+            soil_blend_field[idx] = std::clamp(
+                rn_combined * 0.4f + heights[idx] * 0.3f + (1.0f - slope) * 0.3f, 0.0f, 1.0f);
 
             // ── Soil depth (meters) ─────────────────────────────────────
             float depth;
@@ -4053,9 +4078,9 @@ Terrain generate_terrain(uint32_t width, uint32_t height, const EnvParams& env, 
     t0 = Clock::now();
     compute_geology(rock_field, hardness_field, permeability_field, soil_tex_field,
                     soil_depth_field, porosity_field, ksat_field, field_cap_field, wilt_field,
-                    erodibility_field, rock_blend_field, soil_blend_field,
-                    tectonic_activity_field, height_field, slope_field, band_field, ocean_flags,
-                    dist_ocean_field, width, height, seed);
+                    erodibility_field, rock_blend_field, soil_blend_field, tectonic_activity_field,
+                    height_field, slope_field, band_field, ocean_flags, dist_ocean_field, width,
+                    height, seed);
     if (timings)
         timings->geology_ms = elapsed_ms(t0);
 

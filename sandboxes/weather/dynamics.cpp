@@ -94,7 +94,7 @@ void init_dynamics(DynamicState& state, const Terrain& world, const ClimateData&
             };
             // Two-octave noise: large (8-tile) for lake-scale basins + fine (3-tile) for detail
             float noise_large = bilinear(8, 7919);  // 8-tile wavelength → 10-50 tile basins
-            float noise_fine = bilinear(3, 41077);   // 3-tile wavelength → fine depressions
+            float noise_fine = bilinear(3, 41077);  // 3-tile wavelength → fine depressions
             float noise = noise_large * 0.7f + noise_fine * 0.3f;
             // Scale by terrain flatness — flat areas get deeper depressions
             float flatness = std::max(0.0f, 1.0f - world.tiles[i].slope01 * 5.0f);
@@ -633,8 +633,7 @@ void tick_dynamics(DynamicState& state, const Terrain& world, const ClimateData&
         for (uint16_t bi = 0; bi < state.num_basins; ++bi) {
             if (state.basin_area[bi] == 0)
                 continue;
-            float depression_depth =
-                state.basin_spill_elev[bi] - state.basin_sink_elev[bi];
+            float depression_depth = state.basin_spill_elev[bi] - state.basin_sink_elev[bi];
             if (depression_depth < 0.001f)
                 continue;  // too shallow for spillway management
 
@@ -1020,10 +1019,10 @@ void print_hydrology_diagnostics(const DynamicState& state, const Terrain& world
         uint32_t area;
         float sink_elev;
         float spill_elev;
-        float depth;          // spill - sink
-        float max_sw;         // max surface_water in basin
-        float mean_sw;        // mean surface_water in basin
-        uint32_t wet_tiles;   // tiles with sw > 0.05
+        float depth;         // spill - sink
+        float max_sw;        // max surface_water in basin
+        float mean_sw;       // mean surface_water in basin
+        uint32_t wet_tiles;  // tiles with sw > 0.05
     };
     std::vector<BasinInfo> basins;
     std::vector<int32_t> basin_id(size, -1);  // which basin each tile belongs to
@@ -1050,7 +1049,8 @@ void print_hydrology_diagnostics(const DynamicState& state, const Terrain& world
             float sw = state.tiles[cur].surface_water;
             sw_sum_basin += sw;
             bi.max_sw = std::max(bi.max_sw, sw);
-            if (sw > 0.05f) wet_count++;
+            if (sw > 0.05f)
+                wet_count++;
 
             for (uint32_t up : upstream[cur]) {
                 if (basin_id[up] < 0 && !world.tiles[up].is_ocean) {
@@ -1095,18 +1095,19 @@ void print_hydrology_diagnostics(const DynamicState& state, const Terrain& world
         for (const auto& bi : basins) {
             depths.push_back(bi.depth);
             areas.push_back(static_cast<float>(bi.area));
-            if (bi.depth < 0.005f) shallow_count++;
-            if (bi.depth >= 0.02f) deep_count++;
+            if (bi.depth < 0.005f)
+                shallow_count++;
+            if (bi.depth >= 0.02f)
+                deep_count++;
         }
         std::sort(depths.begin(), depths.end());
         std::sort(areas.begin(), areas.end());
 
         printf("  Depression depth: p50=%.4f p90=%.4f p99=%.4f max=%.4f\n",
-               percentile(depths, 0.5f), percentile(depths, 0.9f),
-               percentile(depths, 0.99f), depths.back());
-        printf("  Basin area: p50=%.0f p90=%.0f p99=%.0f max=%.0f\n",
-               percentile(areas, 0.5f), percentile(areas, 0.9f),
-               percentile(areas, 0.99f), areas.back());
+               percentile(depths, 0.5f), percentile(depths, 0.9f), percentile(depths, 0.99f),
+               depths.back());
+        printf("  Basin area: p50=%.0f p90=%.0f p99=%.0f max=%.0f\n", percentile(areas, 0.5f),
+               percentile(areas, 0.9f), percentile(areas, 0.99f), areas.back());
         printf("  Shallow basins (depth<0.005): %u (%.1f%%)\n", shallow_count,
                100.0f * static_cast<float>(shallow_count) / static_cast<float>(basins.size()));
         printf("  Deep basins (depth>=0.02): %u (%.1f%%)\n", deep_count,
@@ -1115,19 +1116,19 @@ void print_hydrology_diagnostics(const DynamicState& state, const Terrain& world
         // Wet basin status
         uint32_t basins_with_water = 0;
         for (const auto& bi : basins) {
-            if (bi.wet_tiles > 0) basins_with_water++;
+            if (bi.wet_tiles > 0)
+                basins_with_water++;
         }
         printf("  Basins with water (sw>0.05): %u of %zu\n", basins_with_water, basins.size());
 
         // Top 10 largest basins detail
         printf("\n  Top basins (by area):\n");
-        printf("  %6s %8s %8s %8s %8s %8s %6s\n",
-               "area", "sink_el", "spill_el", "depth", "max_sw", "mean_sw", "wet");
+        printf("  %6s %8s %8s %8s %8s %8s %6s\n", "area", "sink_el", "spill_el", "depth", "max_sw",
+               "mean_sw", "wet");
         for (size_t b2 = 0; b2 < std::min(basins.size(), size_t(10)); ++b2) {
             const auto& bi = basins[b2];
-            printf("  %6u %8.4f %8.4f %8.4f %8.4f %8.4f %6u\n",
-                   bi.area, bi.sink_elev, bi.spill_elev, bi.depth, bi.max_sw, bi.mean_sw,
-                   bi.wet_tiles);
+            printf("  %6u %8.4f %8.4f %8.4f %8.4f %8.4f %6u\n", bi.area, bi.sink_elev,
+                   bi.spill_elev, bi.depth, bi.max_sw, bi.mean_sw, bi.wet_tiles);
         }
     }
 

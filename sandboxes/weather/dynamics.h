@@ -23,10 +23,10 @@ struct DynamicTile {
     float effective_storm = 0.0f;     // storminess derived from weather fronts [0..1]
 
     // Hydrology
-    float groundwater = 0.0f;   // groundwater storage (depth equivalent, meters)
-    float discharge = 0.0f;     // total outflow per tick (for river visualization)
-    float quickflow = 0.0f;     // fast-response discharge component (storm pulses)
-    float baseflow_d = 0.0f;    // slow-response discharge component (groundwater-fed)
+    float groundwater = 0.0f;  // groundwater storage (depth equivalent, meters)
+    float discharge = 0.0f;    // total outflow per tick (for river visualization)
+    float quickflow = 0.0f;    // fast-response discharge component (storm pulses)
+    float baseflow_d = 0.0f;   // slow-response discharge component (groundwater-fed)
 
     // Moisture balance (aridity tracking)
     float pet = 0.0f;      // potential evapotranspiration this tick [0..1]
@@ -37,17 +37,17 @@ struct DynamicTile {
 // ── Water budget tracking (cumulative over simulation) ───────────────────
 
 struct WaterBudget {
-    double total_precip = 0;        // total precipitation onto land
-    double total_evap_surface = 0;  // total evaporation from surface water
-    double total_evap_soil = 0;     // total evaporation from soil moisture
-    double total_ocean_drain = 0;   // total water drained to ocean (coastal + overflow)
-    double total_coastal_drain = 0; // coastal WSE drain to ocean neighbors
-    double total_overflow = 0;      // flash runoff from surface water cap
-    double total_gw_recharge = 0;   // total infiltration to groundwater
-    double total_snowmelt = 0;      // total snowmelt
-    double total_headwater = 0;     // total headwater minimum injection
-    double total_accum_raw = 0;     // total D8 accum seed (before headwater injection)
-    double initial_storage = 0;     // sum(sw + sm + gw + snow) at start
+    double total_precip = 0;         // total precipitation onto land
+    double total_evap_surface = 0;   // total evaporation from surface water
+    double total_evap_soil = 0;      // total evaporation from soil moisture
+    double total_ocean_drain = 0;    // total water drained to ocean (coastal + overflow)
+    double total_coastal_drain = 0;  // coastal WSE drain to ocean neighbors
+    double total_overflow = 0;       // flash runoff from surface water cap
+    double total_gw_recharge = 0;    // total infiltration to groundwater
+    double total_snowmelt = 0;       // total snowmelt
+    double total_headwater = 0;      // total headwater minimum injection
+    double total_accum_raw = 0;      // total D8 accum seed (before headwater injection)
+    double initial_storage = 0;      // sum(sw + sm + gw + snow) at start
 };
 
 // ── Dynamic simulation state ───────────────────────────────────────────────
@@ -67,13 +67,13 @@ struct DynamicState {
 
     // Basin spillway storage for lakes
     static constexpr uint16_t NO_BASIN = 0xFFFF;
-    std::vector<uint16_t> basin_id;      // per-tile basin ID (NO_BASIN = not in sink basin)
-    std::vector<float> basin_spill_elev; // per basin: minimum boundary elevation
-    std::vector<float> basin_sink_elev;  // per basin: minimum elevation in basin
-    std::vector<uint32_t> basin_area;    // per basin: number of tiles
-    std::vector<float> basin_volume;     // per basin: current water volume
-    std::vector<uint32_t> basin_spill_tile; // per basin: tile where spill exits
-    std::vector<std::vector<uint32_t>> basin_tiles; // per basin: list of tile indices
+    std::vector<uint16_t> basin_id;          // per-tile basin ID (NO_BASIN = not in sink basin)
+    std::vector<float> basin_spill_elev;     // per basin: minimum boundary elevation
+    std::vector<float> basin_sink_elev;      // per basin: minimum elevation in basin
+    std::vector<uint32_t> basin_area;        // per basin: number of tiles
+    std::vector<float> basin_volume;         // per basin: current water volume
+    std::vector<uint32_t> basin_spill_tile;  // per basin: tile where spill exits
+    std::vector<std::vector<uint32_t>> basin_tiles;  // per basin: list of tile indices
     uint16_t num_basins = 0;
 
     WaterBudget budget;  // cumulative water budget tracking

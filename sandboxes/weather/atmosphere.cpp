@@ -15,7 +15,8 @@ static constexpr float PI = 3.14159265358979f;
 // Temperature
 static constexpr float K_SOLAR =
     8.0f;  // solar heating strength (compensates for lack of vertical Hadley cell)
-static constexpr float K_RAD = 0.09f;  // radiative cooling rate (tuned down from 0.15 to reduce energy drain)
+static constexpr float K_RAD =
+    0.09f;  // radiative cooling rate (tuned down from 0.15 to reduce energy drain)
 static constexpr float K_GROUND_AIR =
     0.25f;  // ground-air coupling (stronger — air follows ground gradient)
 static constexpr float K_AIR_GROUND = 0.15f;    // air-ground coupling (reverse)
@@ -24,7 +25,7 @@ static constexpr float LAPSE_PER_ELEV = 35.0f;  // temp drop per unit elevation
 static constexpr float K_LATENT = 8.0f;         // latent heat per unit condensation (C per unit q)
 
 // Pressure / wind
-static constexpr float K_DRAG = 1.0f;       // terrain roughness drag coefficient
+static constexpr float K_DRAG = 1.0f;  // terrain roughness drag coefficient
 static constexpr float P_TEMP_COEFF =
     0.8f;  // pressure response to temperature (for p_base display mapping)
 static constexpr float K_TURBULENCE = 0.25f;  // thermal turbulence strength (sub-grid gusts)
@@ -36,9 +37,10 @@ static constexpr float ADVECT_SPEED =
 // Moisture
 static constexpr float OCEAN_EVAP_RATE =
     0.10f;  // ocean moisture source per day (balanced: enough for rain, not enough to accumulate)
-static constexpr float LAND_EVAP_RATE = 0.04f;  // land moisture source per day (quadratic soil dependence creates desert shutoff)
-static constexpr float CLOUD_PRECIP_RATE =
-    1.5f;  // cloud → precipitation per day (reduced from 2.5 — lets clouds persist and advect as bands)
+static constexpr float LAND_EVAP_RATE =
+    0.04f;  // land moisture source per day (quadratic soil dependence creates desert shutoff)
+static constexpr float CLOUD_PRECIP_RATE = 1.5f;  // cloud → precipitation per day (reduced from 2.5
+                                                  // — lets clouds persist and advect as bands)
 static constexpr float CLOUD_PRECIP_THRESHOLD =
     0.06f;  // minimum cloud for precipitation (needs thicker cloud for realistic intermittency)
 static constexpr float CLOUD_EVAP_BASE =
@@ -62,49 +64,59 @@ static constexpr float CONVECTIVE_THRESHOLD = 9.0f;  // ground-air T diff trigge
 static constexpr float CONVECTIVE_PRECIP = 0.15f;    // enhanced precip rate during convection
 
 // Phase 0: terrain coupling constants
-static constexpr float K_ASPECT_SOLAR = 2.0f;       // aspect-based solar heating strength
+static constexpr float K_ASPECT_SOLAR = 2.0f;  // aspect-based solar heating strength
 
 // Phase 1: moisture budget constants
-static constexpr float BUDGET_OCEAN_RECHARGE = 0.08f;  // budget recharge over ocean per day (tuned down from 0.20)
-static constexpr float BUDGET_LAND_RECHARGE = 0.01f;   // very slow land recharge
-static constexpr float BUDGET_RAIN_COST = 3.0f;        // budget consumed per unit precipitation (tuned up from 1.5)
-static constexpr float BUDGET_MIXING = 0.005f;         // atmospheric mixing slowly restores budget
+static constexpr float BUDGET_OCEAN_RECHARGE =
+    0.08f;  // budget recharge over ocean per day (tuned down from 0.20)
+static constexpr float BUDGET_LAND_RECHARGE = 0.01f;  // very slow land recharge
+static constexpr float BUDGET_RAIN_COST =
+    3.0f;  // budget consumed per unit precipitation (tuned up from 1.5)
+static constexpr float BUDGET_MIXING = 0.005f;  // atmospheric mixing slowly restores budget
 
 // Phase 2: anomaly relaxation constants
-static constexpr float K_ANOM_RELAX_T = 0.06f;         // T anomaly decay per day (~17d half-life, tuned up from 0.02)
-static constexpr float K_ANOM_RELAX_Q = 0.01f;         // q anomaly decay per day
-static constexpr float K_ANOM_RELAX_P = 0.03f;         // p anomaly decay per day
-static constexpr float BASELINE_UPDATE_RATE = 0.05f;  // seasonal baseline shift rate (~14d half-life)
+static constexpr float K_ANOM_RELAX_T =
+    0.06f;  // T anomaly decay per day (~17d half-life, tuned up from 0.02)
+static constexpr float K_ANOM_RELAX_Q = 0.01f;  // q anomaly decay per day
+static constexpr float K_ANOM_RELAX_P = 0.03f;  // p anomaly decay per day
+static constexpr float BASELINE_UPDATE_RATE =
+    0.05f;  // seasonal baseline shift rate (~14d half-life)
 
 // Phase 3: two-layer atmosphere constants
-static constexpr float K_VERT_HEAT = 0.02f;           // vertical heat exchange per day (tuned down from 0.04)
+static constexpr float K_VERT_HEAT =
+    0.02f;  // vertical heat exchange per day (tuned down from 0.04)
 static constexpr float K_VERT_MOIST = 0.05f;          // vertical moisture exchange per day
 static constexpr float CONVECTIVE_VERT_BOOST = 3.0f;  // enhanced exchange during instability
 static constexpr float INVERSION_THRESHOLD = 2.0f;    // stability > this = inversion
-static constexpr float EXPECTED_LAPSE = -18.0f;       // expected T_upper - T (tuned from -25 to allow inversions)
-static constexpr float UPPER_WIND_FACTOR = 1.5f;      // upper/lower wind ratio (used in init)
-static constexpr float UPPER_ADVECT_SPEED = 6.0f;     // upper advection (increased from 0.8 for visible motion)
+static constexpr float EXPECTED_LAPSE =
+    -18.0f;  // expected T_upper - T (tuned from -25 to allow inversions)
+static constexpr float UPPER_WIND_FACTOR = 1.5f;  // upper/lower wind ratio (used in init)
+static constexpr float UPPER_ADVECT_SPEED =
+    6.0f;  // upper advection (increased from 0.8 for visible motion)
 
 // QG dynamics constants (ADR 0012)
-static constexpr float QG_BETA = 0.873f;       // beta-plane at 45 deg (1/day/cell)
-static constexpr float QG_Ld = 5.0f;           // deformation radius in cells
+static constexpr float QG_BETA = 0.873f;                    // beta-plane at 45 deg (1/day/cell)
+static constexpr float QG_Ld = 5.0f;                        // deformation radius in cells
 static constexpr float QG_invLd2 = 1.0f / (QG_Ld * QG_Ld);  // 0.04
-static constexpr float QG_SHEAR_GAIN = 3.0f;   // (cells/day) per (degC/cell) thermal wind
-static constexpr float QG_C_T = 2.0f;          // degC per psi unit for T_anom mapping
-static constexpr float QG_EKMAN_R = 0.02f;     // 1/day Rayleigh drag on lower layer
-static constexpr int QG_SOR_ITERS = 200;       // SOR iterations for PV inversion
-static constexpr float QG_SOR_OMEGA = 1.6f;    // SOR over-relaxation parameter
+static constexpr float QG_SHEAR_GAIN = 3.0f;  // (cells/day) per (degC/cell) thermal wind
+static constexpr float QG_C_T = 2.0f;         // degC per psi unit for T_anom mapping
+static constexpr float QG_EKMAN_R = 0.02f;    // 1/day Rayleigh drag on lower layer
+static constexpr int QG_SOR_ITERS = 200;      // SOR iterations for PV inversion
+static constexpr float QG_SOR_OMEGA = 1.6f;   // SOR over-relaxation parameter
 
 // Stochastic eddy parameterization constants
 // Instead of advecting PV (which numerical diffusion kills on a 64x32 grid),
 // we generate weather-scale PV perturbations stochastically, modulated by the
 // local baroclinicity (temperature gradient). PV inversion then gives balanced
 // winds. This produces visible, localized, temporary weather systems.
-static constexpr float EDDY_AMPLITUDE = 4.0f;  // PV perturbation amplitude — must be strong enough
-                                                // that psi_bc gradients produce winds comparable to U_s
-static constexpr float EDDY_PERSIST = 0.95f;   // per-tick persistence (α) — shorter-lived = less upscale accumulation
-static constexpr float EDDY_DRIFT_SPEED = 0.3f; // fraction of mean flow for eddy advective drift
-static constexpr int EDDY_CELL_SIZE = 4;        // noise cell size — smaller = more synoptic-scale variance
+static constexpr float EDDY_AMPLITUDE =
+    4.0f;  // PV perturbation amplitude — must be strong enough
+           // that psi_bc gradients produce winds comparable to U_s
+static constexpr float EDDY_PERSIST =
+    0.95f;  // per-tick persistence (α) — shorter-lived = less upscale accumulation
+static constexpr float EDDY_DRIFT_SPEED = 0.3f;  // fraction of mean flow for eddy advective drift
+static constexpr int EDDY_CELL_SIZE =
+    4;  // noise cell size — smaller = more synoptic-scale variance
 
 // Cheap hash noise for turbulence — returns [-1, +1]
 static float turb_noise(uint32_t x, uint32_t y, uint32_t t) {
@@ -336,7 +348,7 @@ void init_atmosphere(AtmosphereState& atmo, const Terrain& world, const ClimateD
         // Perturbation envelope: strongest at mid-latitudes (rows 8-24)
         float y_frac = static_cast<float>(ay) / static_cast<float>(atmo.height);
         float envelope = std::sin(y_frac * PI);  // zero at walls, max at center
-        envelope *= envelope;  // sharper peak
+        envelope *= envelope;                    // sharper peak
         for (uint32_t ax = 0; ax < atmo.width; ++ax) {
             auto& cell = atmo.cell_at(ax, ay);
             cell.psi1 = 0.0f;
@@ -347,13 +359,13 @@ void init_atmosphere(AtmosphereState& atmo, const Terrain& world, const ClimateD
             float perturb = 0.0f;
             // k=3 mode
             perturb += 0.4f * std::sin(2.0f * PI * 3.0f * fax / static_cast<float>(atmo.width) +
-                                        turb_noise(0, ay, 42) * PI);
+                                       turb_noise(0, ay, 42) * PI);
             // k=5 mode
             perturb += 0.3f * std::sin(2.0f * PI * 5.0f * fax / static_cast<float>(atmo.width) +
-                                        turb_noise(1, ay, 43) * PI);
+                                       turb_noise(1, ay, 43) * PI);
             // k=4 mode with y-variation
             perturb += 0.3f * std::sin(2.0f * PI * 4.0f * fax / static_cast<float>(atmo.width) +
-                                        2.0f * PI * fay / static_cast<float>(atmo.height));
+                                       2.0f * PI * fay / static_cast<float>(atmo.height));
             // Smooth noise for some randomness at 8-cell scale
             perturb += smooth_noise(fax, fay, 42, 8) * 0.5f - 0.25f;
 
@@ -375,7 +387,8 @@ static float sample_field(const std::vector<AtmosphereCell>& buf, uint32_t w, ui
     // x: periodic wrap; y: clamp at walls
     float fw = static_cast<float>(w);
     fx = std::fmod(fx, fw);
-    if (fx < 0.0f) fx += fw;
+    if (fx < 0.0f)
+        fx += fw;
     fy = std::clamp(fy, 0.0f, static_cast<float>(h - 1));
 
     auto x0 = static_cast<int>(fx);
@@ -398,7 +411,8 @@ static float sample_field(const std::vector<AtmosphereCell>& buf, uint32_t w, ui
 // Helper: compute variance of a field across all cells
 static float field_variance(const std::vector<AtmosphereCell>& cells,
                             float AtmosphereCell::* field) {
-    if (cells.empty()) return 0.0f;
+    if (cells.empty())
+        return 0.0f;
     double sum = 0, sum2 = 0;
     for (const auto& c : cells) {
         double v = c.*field;
@@ -505,7 +519,7 @@ void tick_atmosphere(AtmosphereState& atmo, const Terrain& world, const DynamicS
 
     // 2a: Compute background thermal wind shear U_s(y) from dT_base/dy
     // The thermal wind relation: vertical wind shear ∝ horizontal temperature gradient
-    float U_shear[64] = {};  // stack-allocated, max grid height 64
+    float U_shear[64] = {};                                   // stack-allocated, max grid height 64
     static_assert(sizeof(U_shear) >= sizeof(float) * 1, "");  // always valid
     for (uint32_t ay = 1; ay + 1 < ah; ++ay) {
         float dTdy = 0.0f;
@@ -513,7 +527,7 @@ void tick_atmosphere(AtmosphereState& atmo, const Terrain& world, const DynamicS
             dTdy += atmo.cell_at(ax, ay + 1).T_base - atmo.cell_at(ax, ay - 1).T_base;
         }
         dTdy /= static_cast<float>(aw) * 2.0f;  // zonal mean gradient (degC/cell)
-        U_shear[ay] = -QG_SHEAR_GAIN * dTdy;     // thermal wind: shear proportional to -dT/dy
+        U_shear[ay] = -QG_SHEAR_GAIN * dTdy;    // thermal wind: shear proportional to -dT/dy
     }
     U_shear[0] = U_shear[1];
     U_shear[ah - 1] = U_shear[ah - 2];
@@ -543,7 +557,9 @@ void tick_atmosphere(AtmosphereState& atmo, const Terrain& world, const DynamicS
         // This makes weather systems move with the background flow
         float drift_x = atmo.day_of_year * 2.0f;  // slow eastward drift (~2 cells/day)
 
-        float persist = std::max(0.3f, std::pow(EDDY_PERSIST, dt_days * 30.0f));  // ~30 ticks/day, floored for high time_scale
+        float persist = std::max(
+            0.3f,
+            std::pow(EDDY_PERSIST, dt_days * 30.0f));  // ~30 ticks/day, floored for high time_scale
 
         for (uint32_t ay = 1; ay + 1 < ah; ++ay) {
             float beta_y = QG_BETA * static_cast<float>(ay);
@@ -570,14 +586,12 @@ void tick_atmosphere(AtmosphereState& atmo, const Terrain& world, const DynamicS
                 // Two time steps blended for smooth temporal evolution
                 float n0_a = smooth_noise(sample_x, sample_y, noise_t0, EDDY_CELL_SIZE);
                 float n1_a = smooth_noise(sample_x, sample_y, noise_t1, EDDY_CELL_SIZE);
-                float n0_b = smooth_noise(sample_x + 500.0f, sample_y + 500.0f,
-                                           noise_t0 + 73, 12);
-                float n1_b = smooth_noise(sample_x + 500.0f, sample_y + 500.0f,
-                                           noise_t1 + 73, 12);
-                float n0_c = smooth_noise(sample_x * 1.5f + 200.0f, sample_y * 1.5f,
-                                           noise_t0 + 137, 5);
-                float n1_c = smooth_noise(sample_x * 1.5f + 200.0f, sample_y * 1.5f,
-                                           noise_t1 + 137, 5);
+                float n0_b = smooth_noise(sample_x + 500.0f, sample_y + 500.0f, noise_t0 + 73, 12);
+                float n1_b = smooth_noise(sample_x + 500.0f, sample_y + 500.0f, noise_t1 + 73, 12);
+                float n0_c =
+                    smooth_noise(sample_x * 1.5f + 200.0f, sample_y * 1.5f, noise_t0 + 137, 5);
+                float n1_c =
+                    smooth_noise(sample_x * 1.5f + 200.0f, sample_y * 1.5f, noise_t1 + 137, 5);
 
                 float noise_a = n0_a + (n1_a - n0_a) * noise_blend;
                 float noise_b = n0_b + (n1_b - n0_b) * noise_blend;
@@ -611,11 +625,9 @@ void tick_atmosphere(AtmosphereState& atmo, const Terrain& world, const DynamicS
             auto& c = atmo.cells[ay * aw + ax];
             uint32_t ax_l = (ax == 0) ? aw - 1 : ax - 1;
             uint32_t ax_r = (ax == aw - 1) ? 0 : ax + 1;
-            float lap_psi2 = atmo.cells[ay * aw + ax_l].psi2 +
-                             atmo.cells[ay * aw + ax_r].psi2 +
+            float lap_psi2 = atmo.cells[ay * aw + ax_l].psi2 + atmo.cells[ay * aw + ax_r].psi2 +
                              atmo.cells[(ay - 1) * aw + ax].psi2 +
-                             atmo.cells[(ay + 1) * aw + ax].psi2 -
-                             4.0f * c.psi2;
+                             atmo.cells[(ay + 1) * aw + ax].psi2 - 4.0f * c.psi2;
             c.q2_pv -= QG_EKMAN_R * lap_psi2 * dt_days;
         }
     }
@@ -662,7 +674,8 @@ void tick_atmosphere(AtmosphereState& atmo, const Terrain& world, const DynamicS
             // Plus cross-isobar flow toward low pressure (Ekman surface friction):
             //   u += -K_cross * dp/dx
             //   v += -K_cross * dp/dy
-            static constexpr float K_PGF = 0.6f;    // pressure-to-wind scaling (cells/day per hPa/cell)
+            static constexpr float K_PGF =
+                0.6f;  // pressure-to-wind scaling (cells/day per hPa/cell)
             static constexpr float K_CROSS = 0.25f;  // cross-isobar (friction) fraction
 
             float p_U = atmo.cell_at(ax, ay - 1).p_anom;
@@ -681,7 +694,7 @@ void tick_atmosphere(AtmosphereState& atmo, const Terrain& world, const DynamicS
             // Geostrophic: wind perpendicular to pressure gradient
             // Cross-isobar: wind toward low pressure (friction turns wind)
             float u2 = -K_PGF * dpdy * sign_f / coriolis - K_CROSS * K_PGF * dpdx / coriolis;
-            float v2 =  K_PGF * dpdx * sign_f / coriolis - K_CROSS * K_PGF * dpdy / coriolis;
+            float v2 = K_PGF * dpdx * sign_f / coriolis - K_CROSS * K_PGF * dpdy / coriolis;
             // Small mean westerly drift (surface expression of jet stream)
             u2 += U_s * 0.1f;
 
@@ -697,10 +710,14 @@ void tick_atmosphere(AtmosphereState& atmo, const Terrain& world, const DynamicS
                 static_cast<uint32_t>(atmo.time_of_day * 1.0f + atmo.day_of_year * 24.0f);
             float tu = turb_noise(ax, ay, turb_fast) * 0.6f +
                        turb_noise(ax * 3u, ay * 3u,
-                           static_cast<uint32_t>(atmo.time_of_day * 0.17f + atmo.day_of_year * 4.0f)) * 0.4f;
+                                  static_cast<uint32_t>(atmo.time_of_day * 0.17f +
+                                                        atmo.day_of_year * 4.0f)) *
+                           0.4f;
             float tv = turb_noise(ax + 97u, ay + 53u, turb_fast) * 0.6f +
                        turb_noise(ax * 3u + 41u, ay * 3u + 17u,
-                           static_cast<uint32_t>(atmo.time_of_day * 0.17f + atmo.day_of_year * 4.0f)) * 0.4f;
+                                  static_cast<uint32_t>(atmo.time_of_day * 0.17f +
+                                                        atmo.day_of_year * 4.0f)) *
+                           0.4f;
             u2 += K_TURBULENCE * 0.5f * convective_strength * daytime_boost * tu;
             v2 += K_TURBULENCE * 0.5f * convective_strength * daytime_boost * tv;
 
@@ -726,7 +743,8 @@ void tick_atmosphere(AtmosphereState& atmo, const Terrain& world, const DynamicS
 
             // 2g: Map T_anom from thermal wind (QG temperature ∝ psi_bc = (psi1 - psi2)/2)
             float psi_bc_here = (cell.psi1 - cell.psi2) * 0.5f;
-            float qg_T_anom = QG_C_T * psi_bc_here * 2.0f;  // factor 2 because psi_bc is half of (psi1-psi2)
+            float qg_T_anom =
+                QG_C_T * psi_bc_here * 2.0f;  // factor 2 because psi_bc is half of (psi1-psi2)
             qg_T_anom = std::clamp(qg_T_anom, -15.0f, 15.0f);
             cell.T_anom = cell.T_anom * 0.7f + qg_T_anom * 0.3f;
 
@@ -782,9 +800,11 @@ void tick_atmosphere(AtmosphereState& atmo, const Terrain& world, const DynamicS
                 float s = MAX_TRACE_DIST / trace_dist;
                 trace_x *= s;
                 trace_y *= s;
-                if (diag) diag->cfl_clamp_count++;
+                if (diag)
+                    diag->cfl_clamp_count++;
             }
-            if (diag) displacements.push_back(trace_dist);
+            if (diag)
+                displacements.push_back(trace_dist);
 
             float x0 = wrap_x(static_cast<float>(ax) - trace_x);
             float y0 = static_cast<float>(ay) - trace_y;
@@ -816,7 +836,8 @@ void tick_atmosphere(AtmosphereState& atmo, const Terrain& world, const DynamicS
                 trace_xu *= su;
                 trace_yu *= su;
             }
-            if (diag) displacements_upper.push_back(trace_dist_u);
+            if (diag)
+                displacements_upper.push_back(trace_dist_u);
             float x0u = wrap_x(static_cast<float>(ax) - trace_xu);
             float y0u = static_cast<float>(ay) - trace_yu;
             cell.T_upper = sample_field(atmo.scratch, aw, ah, x0u, y0u, &AtmosphereCell::T_upper);
@@ -839,7 +860,8 @@ void tick_atmosphere(AtmosphereState& atmo, const Terrain& world, const DynamicS
         std::sort(displacements.begin(), displacements.end());
         std::sort(displacements_upper.begin(), displacements_upper.end());
         auto pctf = [](std::vector<float>& v, float p) -> float {
-            if (v.empty()) return 0.0f;
+            if (v.empty())
+                return 0.0f;
             size_t idx = static_cast<size_t>(p * static_cast<float>(v.size() - 1));
             return v[std::min(idx, v.size() - 1)];
         };
@@ -850,8 +872,10 @@ void tick_atmosphere(AtmosphereState& atmo, const Terrain& world, const DynamicS
         diag->displacement_upper_p90 = pctf(displacements_upper, 0.9f);
         uint32_t sub_tenth = 0;
         for (float d : displacements)
-            if (d < 0.1f) sub_tenth++;
-        diag->frac_sub_tenth = static_cast<float>(sub_tenth) / static_cast<float>(displacements.size());
+            if (d < 0.1f)
+                sub_tenth++;
+        diag->frac_sub_tenth =
+            static_cast<float>(sub_tenth) / static_cast<float>(displacements.size());
     }
 
     // ── Invariant 2: Correct advection-induced water drift ────────────
@@ -1137,8 +1161,8 @@ void tick_atmosphere(AtmosphereState& atmo, const Terrain& world, const DynamicS
                 float wet = std::clamp(cell.avg_soil_wet, 0.0f, 1.0f);
                 float soil_source = wet * wet * LAND_EVAP_RATE;
                 float temp_factor = std::clamp(cell.T / 25.0f, 0.1f, 1.2f);
-                float evap_amount = soil_source * temp_factor * wind_evap_factor *
-                                    humidity_deficit * dt_days;
+                float evap_amount =
+                    soil_source * temp_factor * wind_evap_factor * humidity_deficit * dt_days;
                 cell.q_anom += evap_amount;
             }
 
@@ -1323,8 +1347,8 @@ void tick_atmosphere(AtmosphereState& atmo, const Terrain& world, const DynamicS
 
             // Rain shadow: remove moisture on leeward side of mountains
             if (uplift > 0.05f) {
-                float rain_shadow_loss = std::min(cell.q * uplift * 0.2f * dt_days,
-                                                  std::max(cell.q, 0.0f));
+                float rain_shadow_loss =
+                    std::min(cell.q * uplift * 0.2f * dt_days, std::max(cell.q, 0.0f));
                 cell.q_anom -= rain_shadow_loss;
                 cell.q -= rain_shadow_loss;
             }
@@ -1677,15 +1701,24 @@ void print_atmosphere_diagnostics(const AtmosphereState& atmo) {
             p_vals.push_back(c.p);
 
             // Clamp fractions
-            if (c.storminess >= 0.999f) ++storm_at_1;
-            if (spd >= MAX_WIND_SPEED - 0.1f) ++wind_at_cap;
-            if (c.cloud < 0.001f) ++cloud_at_0;
-            if (c.q < 0.005f) ++q_near_0;
-            if (rh > 0.95f) ++q_near_qsat;
-            if (rh > 1.0f) ++rh_above_1;
-            if (c.precip_rate < 0.001f) ++precip_at_0;
-            if (c.precip_rate > 0.01f) ++precip_active;
-            if (c.precip_budget < 0.05f) ++budget_near_0;
+            if (c.storminess >= 0.999f)
+                ++storm_at_1;
+            if (spd >= MAX_WIND_SPEED - 0.1f)
+                ++wind_at_cap;
+            if (c.cloud < 0.001f)
+                ++cloud_at_0;
+            if (c.q < 0.005f)
+                ++q_near_0;
+            if (rh > 0.95f)
+                ++q_near_qsat;
+            if (rh > 1.0f)
+                ++rh_above_1;
+            if (c.precip_rate < 0.001f)
+                ++precip_at_0;
+            if (c.precip_rate > 0.01f)
+                ++precip_active;
+            if (c.precip_budget < 0.05f)
+                ++budget_near_0;
 
             // Land vs ocean
             if (c.is_water) {
@@ -1718,12 +1751,15 @@ void print_atmosphere_diagnostics(const AtmosphereState& atmo) {
             b.storm += c.storminess;
             b.stability += c.stability;
             b.count++;
-            if (c.stability > INVERSION_THRESHOLD) ++b.inversion;
+            if (c.stability > INVERSION_THRESHOLD)
+                ++b.inversion;
 
             // Pressure gradient magnitude (finite difference)
             if (ax > 0 && ax < aw - 1 && ay > 0 && ay < ah - 1) {
-                float dpdx = (atmo.cells[ay * aw + ax + 1].p - atmo.cells[ay * aw + ax - 1].p) * 0.5f;
-                float dpdy = (atmo.cells[(ay + 1) * aw + ax].p - atmo.cells[(ay - 1) * aw + ax].p) * 0.5f;
+                float dpdx =
+                    (atmo.cells[ay * aw + ax + 1].p - atmo.cells[ay * aw + ax - 1].p) * 0.5f;
+                float dpdy =
+                    (atmo.cells[(ay + 1) * aw + ax].p - atmo.cells[(ay - 1) * aw + ax].p) * 0.5f;
                 grad_p_vals.push_back(std::sqrt(dpdx * dpdx + dpdy * dpdy));
             }
         }
@@ -1731,21 +1767,23 @@ void print_atmosphere_diagnostics(const AtmosphereState& atmo) {
 
     // Sort all vectors for percentile computation
     auto pct = [](std::vector<float>& v, float p) -> float {
-        if (v.empty()) return 0.0f;
+        if (v.empty())
+            return 0.0f;
         std::sort(v.begin(), v.end());
         size_t idx = static_cast<size_t>(p * static_cast<float>(v.size() - 1));
         return v[std::min(idx, v.size() - 1)];
     };
     // Sort once, compute multiple percentiles
-    for (auto* vec : {&T_vals, &T_base_vals, &T_anom_vals, &q_vals, &rh_vals,
-                      &cloud_vals, &precip_vals, &storm_vals, &wind_vals,
-                      &wind_upper_vals, &stability_vals, &budget_vals, &p_vals, &grad_p_vals}) {
+    for (auto* vec : {&T_vals, &T_base_vals, &T_anom_vals, &q_vals, &rh_vals, &cloud_vals,
+                      &precip_vals, &storm_vals, &wind_vals, &wind_upper_vals, &stability_vals,
+                      &budget_vals, &p_vals, &grad_p_vals}) {
         std::sort(vec->begin(), vec->end());
     }
 
     auto print_pct = [](const char* name, std::vector<float>& v) {
         auto p = [&v](float f) -> float {
-            if (v.empty()) return 0.0f;
+            if (v.empty())
+                return 0.0f;
             size_t idx = static_cast<size_t>(f * static_cast<float>(v.size() - 1));
             return v[std::min(idx, v.size() - 1)];
         };
@@ -1782,40 +1820,40 @@ void print_atmosphere_diagnostics(const AtmosphereState& atmo) {
     printf("  q_near_qsat:     %6u / %zu (%.1f%%)\n", q_near_qsat, n, 100.0f * q_near_qsat / fn);
     printf("  RH > 1.0:        %6u / %zu (%.1f%%)\n", rh_above_1, n, 100.0f * rh_above_1 / fn);
     printf("  precip_at_0:     %6u / %zu (%.1f%%)\n", precip_at_0, n, 100.0f * precip_at_0 / fn);
-    printf("  precip_active:   %6u / %zu (%.1f%%)\n", precip_active, n, 100.0f * precip_active / fn);
-    printf("  budget_near_0:   %6u / %zu (%.1f%%)\n", budget_near_0, n, 100.0f * budget_near_0 / fn);
+    printf("  precip_active:   %6u / %zu (%.1f%%)\n", precip_active, n,
+           100.0f * precip_active / fn);
+    printf("  budget_near_0:   %6u / %zu (%.1f%%)\n", budget_near_0, n,
+           100.0f * budget_near_0 / fn);
 
     // 3. Land vs ocean
     printf("\n--- LAND vs OCEAN ---\n");
     printf("  %-12s %8s %8s %8s %8s %8s\n", "", "T_mean", "q_mean", "cloud", "precip", "wind");
     if (ocean_count > 0) {
         auto oc = static_cast<float>(ocean_count);
-        printf("  %-12s %8.2f %8.4f %8.4f %8.4f %8.3f  (n=%u)\n", "Ocean",
-               ocean_T_sum / oc, ocean_q_sum / oc, ocean_cloud_sum / oc,
-               ocean_precip_sum / oc, ocean_wind_sum / oc, ocean_count);
+        printf("  %-12s %8.2f %8.4f %8.4f %8.4f %8.3f  (n=%u)\n", "Ocean", ocean_T_sum / oc,
+               ocean_q_sum / oc, ocean_cloud_sum / oc, ocean_precip_sum / oc, ocean_wind_sum / oc,
+               ocean_count);
     }
     if (land_count > 0) {
         auto lc = static_cast<float>(land_count);
-        printf("  %-12s %8.2f %8.4f %8.4f %8.4f %8.3f  (n=%u)\n", "Land",
-               land_T_sum / lc, land_q_sum / lc, land_cloud_sum / lc,
-               land_precip_sum / lc, land_wind_sum / lc, land_count);
+        printf("  %-12s %8.2f %8.4f %8.4f %8.4f %8.3f  (n=%u)\n", "Land", land_T_sum / lc,
+               land_q_sum / lc, land_cloud_sum / lc, land_precip_sum / lc, land_wind_sum / lc,
+               land_count);
     }
 
     // 4. 16-band latitude breakdown
     printf("\n--- 16-BAND LATITUDE BREAKDOWN ---\n");
-    printf("  %4s %7s %7s %7s %7s %7s %7s %7s %7s %7s %7s %7s %5s\n",
-           "band", "T_mean", "T_base", "T_anom", "q_mean", "cloud", "precip",
-           "wind", "u_mean", "v_mean", "storm", "stab", "inv%%");
+    printf("  %4s %7s %7s %7s %7s %7s %7s %7s %7s %7s %7s %7s %5s\n", "band", "T_mean", "T_base",
+           "T_anom", "q_mean", "cloud", "precip", "wind", "u_mean", "v_mean", "storm", "stab",
+           "inv%%");
     for (int i = 0; i < NBANDS; ++i) {
         auto& b = bands[i];
-        if (b.count == 0) continue;
+        if (b.count == 0)
+            continue;
         auto bc = static_cast<float>(b.count);
-        printf("  %4d %7.2f %7.2f %7.2f %7.4f %7.4f %7.4f %7.3f %7.3f %7.3f %7.4f %7.2f %5.1f\n",
-               i,
-               b.T / bc, b.T_base / bc, b.T_anom / bc,
-               b.q / bc, b.cloud / bc, b.precip / bc,
-               b.wind / bc, b.u / bc, b.v / bc,
-               b.storm / bc, b.stability / bc,
+        printf("  %4d %7.2f %7.2f %7.2f %7.4f %7.4f %7.4f %7.3f %7.3f %7.3f %7.4f %7.2f %5.1f\n", i,
+               b.T / bc, b.T_base / bc, b.T_anom / bc, b.q / bc, b.cloud / bc, b.precip / bc,
+               b.wind / bc, b.u / bc, b.v / bc, b.storm / bc, b.stability / bc,
                100.0f * b.inversion / bc);
     }
 
@@ -1853,8 +1891,8 @@ void print_atmosphere_diagnostics(const AtmosphereState& atmo) {
     printf("  sum(q_lower):   %.4f\n", q_total);
     printf("  sum(cloud):     %.4f\n", cloud_total);
     printf("  sum(q_upper):   %.4f\n", q_upper_total);
-    printf("  sum(q+cloud):   %.4f  (tracked total_water: %.4f)\n",
-           q_total + cloud_total, atmo.total_water);
+    printf("  sum(q+cloud):   %.4f  (tracked total_water: %.4f)\n", q_total + cloud_total,
+           atmo.total_water);
     printf("  water_correction_last: %.6f\n", atmo.last_water_correction);
 
     // 6b. QG field spatial structure
@@ -1862,7 +1900,8 @@ void print_atmosphere_diagnostics(const AtmosphereState& atmo) {
     // Print psi1, psi2 at 5 evenly spaced rows to see spatial structure
     for (int ri = 0; ri < 5; ++ri) {
         uint32_t row = static_cast<uint32_t>(ri) * (ah - 1) / 4;
-        if (row >= ah) row = ah - 1;
+        if (row >= ah)
+            row = ah - 1;
         printf("  psi1 row %2u: ", row);
         for (uint32_t ax = 0; ax < aw; ax += aw / 16) {
             printf("%7.2f", atmo.cells[row * aw + ax].psi1);
@@ -1914,8 +1953,8 @@ void print_atmosphere_diagnostics(const AtmosphereState& atmo) {
             rq += c.q;
         }
         float faw = static_cast<float>(aw);
-        printf("  %-12s T_mean=%7.2f  v_mean=%7.4f  u_mean=%7.4f  q_mean=%7.4f\n",
-               label, rT / faw, rv / faw, ru / faw, rq / faw);
+        printf("  %-12s T_mean=%7.2f  v_mean=%7.4f  u_mean=%7.4f  q_mean=%7.4f\n", label, rT / faw,
+               rv / faw, ru / faw, rq / faw);
     };
     row_stats(0, "North edge");
     row_stats(1, "North+1");
@@ -1929,7 +1968,8 @@ void print_atmosphere_diagnostics(const AtmosphereState& atmo) {
         float spd = std::sqrt(c.u * c.u + c.v * c.v);
         float spd_u = std::sqrt(c.u_upper * c.u_upper + c.v_upper * c.v_upper);
         max_courant_lower = std::max(max_courant_lower, spd * ADVECT_SPEED * atmo.last_dt_days);
-        max_courant_upper = std::max(max_courant_upper, spd_u * UPPER_ADVECT_SPEED * atmo.last_dt_days);
+        max_courant_upper =
+            std::max(max_courant_upper, spd_u * UPPER_ADVECT_SPEED * atmo.last_dt_days);
     }
     printf("  max_courant_lower: %.4f\n", max_courant_lower);
     printf("  max_courant_upper: %.4f\n", max_courant_upper);
@@ -1941,7 +1981,7 @@ void print_atmosphere_diagnostics(const AtmosphereState& atmo) {
     double rh_sum = 0, supersaturation_sum = 0;
     uint32_t supersat_count = 0;
     for (size_t i = 0; i < atmo.cells.size(); ++i) {
-        rh_sum += rh_vals[i]; // already sorted but sum doesn't care
+        rh_sum += rh_vals[i];  // already sorted but sum doesn't care
     }
     // Use unsorted data for mean supersaturation
     for (const auto& c : atmo.cells) {
@@ -1955,15 +1995,15 @@ void print_atmosphere_diagnostics(const AtmosphereState& atmo) {
     printf("  RH_mean: %.4f\n", rh_sum / static_cast<float>(n));
     printf("  supersaturated cells: %u (%.1f%%)\n", supersat_count, 100.0f * supersat_count / fn);
     if (supersat_count > 0) {
-        printf("  mean supersaturation (q-qsat): %.6f\n",
-               supersaturation_sum / supersat_count);
+        printf("  mean supersaturation (q-qsat): %.6f\n", supersaturation_sum / supersat_count);
     }
 }
 
 // ── Variability diagnostics ──────────────────────────────────────────
 
 void print_variability_diagnostics(const AtmosphereState& atmo) {
-    if (atmo.cells.empty()) return;
+    if (atmo.cells.empty())
+        return;
     uint32_t aw = atmo.width, ah = atmo.height;
 
     // Collect vorticity, divergence, gradient magnitudes
@@ -2019,60 +2059,60 @@ void print_variability_diagnostics(const AtmosphereState& atmo) {
 
     // Sort for percentiles
     auto pctf = [](std::vector<float>& v, float p) -> float {
-        if (v.empty()) return 0.0f;
+        if (v.empty())
+            return 0.0f;
         size_t idx = static_cast<size_t>(p * static_cast<float>(v.size() - 1));
         return v[std::min(idx, v.size() - 1)];
     };
-    for (auto* vec : {&vort_vals, &div_vals, &grad_T_vals, &grad_p_vals,
-                      &grad_q_vals, &land_rh_vals, &land_q_vals}) {
+    for (auto* vec : {&vort_vals, &div_vals, &grad_T_vals, &grad_p_vals, &grad_q_vals,
+                      &land_rh_vals, &land_q_vals}) {
         std::sort(vec->begin(), vec->end());
     }
 
     // Also compute absolute vorticity and divergence percentiles
     std::vector<float> abs_vort, abs_div;
-    for (float v : vort_vals) abs_vort.push_back(std::abs(v));
-    for (float d : div_vals) abs_div.push_back(std::abs(d));
+    for (float v : vort_vals)
+        abs_vort.push_back(std::abs(v));
+    for (float d : div_vals)
+        abs_div.push_back(std::abs(d));
     std::sort(abs_vort.begin(), abs_vort.end());
     std::sort(abs_div.begin(), abs_div.end());
 
     printf("\n=== VARIABILITY DIAGNOSTICS ===\n");
 
     printf("\n--- VORTICITY (dv/dx - du/dy) ---\n");
-    printf("  signed:  p01=%.4f p05=%.4f p50=%.4f p95=%.4f p99=%.4f\n",
-           pctf(vort_vals, 0.01f), pctf(vort_vals, 0.05f), pctf(vort_vals, 0.50f),
-           pctf(vort_vals, 0.95f), pctf(vort_vals, 0.99f));
-    printf("  |vort|:  p50=%.4f p90=%.4f p99=%.4f max=%.4f\n",
-           pctf(abs_vort, 0.50f), pctf(abs_vort, 0.90f), pctf(abs_vort, 0.99f),
-           abs_vort.empty() ? 0.0f : abs_vort.back());
+    printf("  signed:  p01=%.4f p05=%.4f p50=%.4f p95=%.4f p99=%.4f\n", pctf(vort_vals, 0.01f),
+           pctf(vort_vals, 0.05f), pctf(vort_vals, 0.50f), pctf(vort_vals, 0.95f),
+           pctf(vort_vals, 0.99f));
+    printf("  |vort|:  p50=%.4f p90=%.4f p99=%.4f max=%.4f\n", pctf(abs_vort, 0.50f),
+           pctf(abs_vort, 0.90f), pctf(abs_vort, 0.99f), abs_vort.empty() ? 0.0f : abs_vort.back());
 
     printf("\n--- DIVERGENCE (du/dx + dv/dy) ---\n");
-    printf("  signed:  p01=%.4f p05=%.4f p50=%.4f p95=%.4f p99=%.4f\n",
-           pctf(div_vals, 0.01f), pctf(div_vals, 0.05f), pctf(div_vals, 0.50f),
-           pctf(div_vals, 0.95f), pctf(div_vals, 0.99f));
-    printf("  |div|:   p50=%.4f p90=%.4f p99=%.4f max=%.4f\n",
-           pctf(abs_div, 0.50f), pctf(abs_div, 0.90f), pctf(abs_div, 0.99f),
-           abs_div.empty() ? 0.0f : abs_div.back());
+    printf("  signed:  p01=%.4f p05=%.4f p50=%.4f p95=%.4f p99=%.4f\n", pctf(div_vals, 0.01f),
+           pctf(div_vals, 0.05f), pctf(div_vals, 0.50f), pctf(div_vals, 0.95f),
+           pctf(div_vals, 0.99f));
+    printf("  |div|:   p50=%.4f p90=%.4f p99=%.4f max=%.4f\n", pctf(abs_div, 0.50f),
+           pctf(abs_div, 0.90f), pctf(abs_div, 0.99f), abs_div.empty() ? 0.0f : abs_div.back());
 
     printf("\n--- GRADIENT MAGNITUDES ---\n");
-    printf("  |grad_T|: p50=%.4f p90=%.4f p99=%.4f max=%.4f\n",
-           pctf(grad_T_vals, 0.50f), pctf(grad_T_vals, 0.90f),
-           pctf(grad_T_vals, 0.99f), grad_T_vals.empty() ? 0.0f : grad_T_vals.back());
-    printf("  |grad_p|: p50=%.4f p90=%.4f p99=%.4f max=%.4f\n",
-           pctf(grad_p_vals, 0.50f), pctf(grad_p_vals, 0.90f),
-           pctf(grad_p_vals, 0.99f), grad_p_vals.empty() ? 0.0f : grad_p_vals.back());
-    printf("  |grad_q|: p50=%.4f p90=%.4f p99=%.4f max=%.4f\n",
-           pctf(grad_q_vals, 0.50f), pctf(grad_q_vals, 0.90f),
-           pctf(grad_q_vals, 0.99f), grad_q_vals.empty() ? 0.0f : grad_q_vals.back());
+    printf("  |grad_T|: p50=%.4f p90=%.4f p99=%.4f max=%.4f\n", pctf(grad_T_vals, 0.50f),
+           pctf(grad_T_vals, 0.90f), pctf(grad_T_vals, 0.99f),
+           grad_T_vals.empty() ? 0.0f : grad_T_vals.back());
+    printf("  |grad_p|: p50=%.4f p90=%.4f p99=%.4f max=%.4f\n", pctf(grad_p_vals, 0.50f),
+           pctf(grad_p_vals, 0.90f), pctf(grad_p_vals, 0.99f),
+           grad_p_vals.empty() ? 0.0f : grad_p_vals.back());
+    printf("  |grad_q|: p50=%.4f p90=%.4f p99=%.4f max=%.4f\n", pctf(grad_q_vals, 0.50f),
+           pctf(grad_q_vals, 0.90f), pctf(grad_q_vals, 0.99f),
+           grad_q_vals.empty() ? 0.0f : grad_q_vals.back());
 
     printf("\n--- LAND MOISTURE / CONVECTION ---\n");
     printf("  land_RH:  p10=%.4f p25=%.4f p50=%.4f p75=%.4f p90=%.4f p99=%.4f\n",
            pctf(land_rh_vals, 0.10f), pctf(land_rh_vals, 0.25f), pctf(land_rh_vals, 0.50f),
            pctf(land_rh_vals, 0.75f), pctf(land_rh_vals, 0.90f), pctf(land_rh_vals, 0.99f));
-    printf("  land_q:   p10=%.4f p25=%.4f p50=%.4f p75=%.4f p90=%.4f\n",
-           pctf(land_q_vals, 0.10f), pctf(land_q_vals, 0.25f), pctf(land_q_vals, 0.50f),
-           pctf(land_q_vals, 0.75f), pctf(land_q_vals, 0.90f));
-    printf("  convective_trigger: %u of %u land cells (%.2f%%)\n",
-           conv_trigger_land, land_cells,
+    printf("  land_q:   p10=%.4f p25=%.4f p50=%.4f p75=%.4f p90=%.4f\n", pctf(land_q_vals, 0.10f),
+           pctf(land_q_vals, 0.25f), pctf(land_q_vals, 0.50f), pctf(land_q_vals, 0.75f),
+           pctf(land_q_vals, 0.90f));
+    printf("  convective_trigger: %u of %u land cells (%.2f%%)\n", conv_trigger_land, land_cells,
            land_cells > 0 ? 100.0f * conv_trigger_land / land_cells : 0.0f);
 
     // Variance by wavenumber (crude 1D power spectrum along x for each row, averaged)
@@ -2098,17 +2138,21 @@ void print_variability_diagnostics(const AtmosphereState& atmo) {
         }
     }
     // Average over rows
-    for (auto& p : power_by_k) p /= ah;
+    for (auto& p : power_by_k)
+        p /= ah;
     // Print grouped
     printf("  k=1-2 (planetary): %.4f\n", power_by_k[1] + power_by_k[2]);
     double mid_sum = 0;
-    for (uint32_t k = 3; k <= 8; ++k) mid_sum += power_by_k[k];
+    for (uint32_t k = 3; k <= 8; ++k)
+        mid_sum += power_by_k[k];
     printf("  k=3-8 (synoptic):  %.4f\n", mid_sum);
     double meso_sum = 0;
-    for (uint32_t k = 9; k <= aw / 2; ++k) meso_sum += power_by_k[k];
+    for (uint32_t k = 9; k <= aw / 2; ++k)
+        meso_sum += power_by_k[k];
     printf("  k=9-%u (meso):     %.4f\n", aw / 2, meso_sum);
     double total_power = 0;
-    for (uint32_t k = 1; k <= aw / 2; ++k) total_power += power_by_k[k];
+    for (uint32_t k = 1; k <= aw / 2; ++k)
+        total_power += power_by_k[k];
     if (total_power > 0) {
         printf("  synoptic fraction: %.1f%%\n", 100.0 * mid_sum / total_power);
         printf("  meso fraction:     %.1f%%\n", 100.0 * meso_sum / total_power);
@@ -2122,14 +2166,19 @@ void print_variability_diagnostics(const AtmosphereState& atmo) {
             bool is_min = true, is_max = true;
             for (int dy = -1; dy <= 1; ++dy) {
                 for (int dx = -1; dx <= 1; ++dx) {
-                    if (dx == 0 && dy == 0) continue;
+                    if (dx == 0 && dy == 0)
+                        continue;
                     float pn = atmo.cell_at(ax + dx, ay + dy).p_anom;
-                    if (pn <= p) is_min = false;
-                    if (pn >= p) is_max = false;
+                    if (pn <= p)
+                        is_min = false;
+                    if (pn >= p)
+                        is_max = false;
                 }
             }
-            if (is_min && p < -1.0f) p_min_count++;
-            if (is_max && p > 1.0f) p_max_count++;
+            if (is_min && p < -1.0f)
+                p_min_count++;
+            if (is_max && p > 1.0f)
+                p_max_count++;
         }
     }
     printf("\n--- PRESSURE EXTREMA (p_anom) ---\n");

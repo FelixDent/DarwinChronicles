@@ -63,10 +63,10 @@ struct AtmosphereCell {
     float stability = 0.0f;  // T_upper - T (negative = unstable)
 
     // QG dynamics: two-layer quasi-geostrophic fields
-    float psi1 = 0.0f;    // upper layer streamfunction (cell^2/day)
-    float psi2 = 0.0f;    // lower layer streamfunction
-    float q1_pv = 0.0f;   // upper layer potential vorticity
-    float q2_pv = 0.0f;   // lower layer potential vorticity
+    float psi1 = 0.0f;   // upper layer streamfunction (cell^2/day)
+    float psi2 = 0.0f;   // lower layer streamfunction
+    float q1_pv = 0.0f;  // upper layer potential vorticity
+    float q2_pv = 0.0f;  // lower layer potential vorticity
 };
 
 // ── Atmosphere state ───────────────────────────────────────────────────

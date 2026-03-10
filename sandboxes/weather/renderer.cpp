@@ -133,7 +133,8 @@ void Camera::fit_world(uint32_t world_w, uint32_t world_h, int tile_size, int wi
     zoom = std::clamp(std::min(zx, zy), MIN_ZOOM, MAX_ZOOM);
 }
 
-void Camera::clamp_to_world(uint32_t world_w, uint32_t world_h, int tile_size, int win_w, int win_h) {
+void Camera::clamp_to_world(uint32_t world_w, uint32_t world_h, int tile_size, int win_w,
+                            int win_h) {
     float world_px_w = static_cast<float>(world_w) * static_cast<float>(tile_size);
     float world_px_h = static_cast<float>(world_h) * static_cast<float>(tile_size);
     float half_view_w = static_cast<float>(win_w) / (2.0f * zoom);
@@ -185,26 +186,163 @@ void Renderer::shutdown() {
 }
 
 void Renderer::invalidate_terrain_cache() {
-    if (cache_macro_.texture) { SDL_DestroyTexture(cache_macro_.texture); cache_macro_.texture = nullptr; }
-    if (cache_meso_.texture) { SDL_DestroyTexture(cache_meso_.texture); cache_meso_.texture = nullptr; }
+    // Signal background thread to stop, then join it
+    detail_cancel_.store(true, std::memory_order_relaxed);
+    if (detail_thread_ && detail_thread_->joinable()) {
+        detail_thread_->join();
+    }
+    detail_thread_.reset();
+    detail_cancel_.store(false, std::memory_order_relaxed);
+    detail_baking_.store(false, std::memory_order_relaxed);
+    detail_ready_.store(false, std::memory_order_relaxed);
+    detail_pixels_.clear();
+    detail_pixels_.shrink_to_fit();
+
+    if (cache_macro_.texture) {
+        SDL_DestroyTexture(cache_macro_.texture);
+        cache_macro_.texture = nullptr;
+    }
+    if (cache_meso_.texture) {
+        SDL_DestroyTexture(cache_meso_.texture);
+        cache_meso_.texture = nullptr;
+    }
+    if (cache_detail_.texture) {
+        SDL_DestroyTexture(cache_detail_.texture);
+        cache_detail_.texture = nullptr;
+    }
     cache_macro_.valid = false;
     cache_meso_.valid = false;
+    cache_detail_.valid = false;
+}
+
+void Renderer::render_loading_screen(float progress, const char* stage) {
+    if (!renderer_)
+        return;
+
+    int win_w, win_h;
+    SDL_GetRendererOutputSize(renderer_, &win_w, &win_h);
+
+    // Clear to panel background
+    SDL_SetRenderDrawColor(renderer_, 11, 16, 28, 255);
+    SDL_RenderClear(renderer_);
+
+    int cx = win_w / 2;
+    int cy = win_h / 2;
+
+    // Title
+    const char* title = "Baking terrain textures...";
+    int tw = text_pixel_width(title, 2);
+    draw_text(renderer_, cx - tw / 2, cy - 40, title, 2, 215, 220, 227);
+
+    // Stage label
+    int sw = text_pixel_width(stage, 1);
+    draw_text(renderer_, cx - sw / 2, cy - 10, stage, 1, 154, 166, 178);
+
+    // Progress bar
+    constexpr int BAR_W = 300, BAR_H = 16;
+    int bar_x = cx - BAR_W / 2;
+    int bar_y = cy + 10;
+
+    SDL_SetRenderDrawColor(renderer_, 42, 53, 66, 255);
+    SDL_Rect outline = {bar_x, bar_y, BAR_W, BAR_H};
+    SDL_RenderDrawRect(renderer_, &outline);
+
+    int fill_w = static_cast<int>(progress * static_cast<float>(BAR_W - 2));
+    if (fill_w > 0) {
+        SDL_SetRenderDrawColor(renderer_, 110, 195, 240, 255);
+        SDL_Rect fill = {bar_x + 1, bar_y + 1, fill_w, BAR_H - 2};
+        SDL_RenderFillRect(renderer_, &fill);
+    }
+
+    // Percentage
+    char pct_text[16];
+    snprintf(pct_text, sizeof(pct_text), "%d%%", static_cast<int>(progress * 100.0f));
+    int pw = text_pixel_width(pct_text, 1);
+    draw_text(renderer_, cx - pw / 2, bar_y + BAR_H + 8, pct_text, 1, 215, 220, 227);
+
+    SDL_RenderPresent(renderer_);
+}
+
+void Renderer::finish_detail_bake() {
+    if (!detail_ready_.load(std::memory_order_acquire))
+        return;
+
+    // Join the background thread
+    if (detail_thread_ && detail_thread_->joinable()) {
+        detail_thread_->join();
+    }
+    detail_thread_.reset();
+
+    // Upload pixels to GPU texture
+    if (cache_detail_.texture)
+        SDL_DestroyTexture(cache_detail_.texture);
+    cache_detail_.texture = SDL_CreateTexture(
+        renderer_, SDL_PIXELFORMAT_RGBA32, SDL_TEXTUREACCESS_STATIC, detail_tex_w_, detail_tex_h_);
+    if (cache_detail_.texture) {
+        SDL_UpdateTexture(cache_detail_.texture, nullptr, detail_pixels_.data(), detail_tex_w_ * 4);
+        cache_detail_.tex_w = detail_tex_w_;
+        cache_detail_.tex_h = detail_tex_h_;
+        cache_detail_.world_x0 = 0.0f;
+        cache_detail_.world_y0 = 0.0f;
+        cache_detail_.world_per_pixel = 1.0f / 16.0f;
+        cache_detail_.seed = cached_seed_;
+        cache_detail_.valid = true;
+    }
+
+    detail_pixels_.clear();
+    detail_pixels_.shrink_to_fit();
+    detail_baking_.store(false, std::memory_order_relaxed);
+    detail_ready_.store(false, std::memory_order_relaxed);
 }
 
 void Renderer::bake_terrain_cache(const Terrain& world, uint32_t seed, float water_level) {
+    // Ensure template atlas is generated before any rendering
+    {
+        auto& atlas = const_cast<TemplateAtlas&>(get_template_atlas());
+        if (!atlas.valid || atlas.seed != seed) {
+            generate_template_atlas(atlas, seed);
+        }
+    }
+
+    // Cancel any in-progress background bake
+    detail_cancel_.store(true, std::memory_order_relaxed);
+    if (detail_thread_ && detail_thread_->joinable()) {
+        detail_thread_->join();
+    }
+    detail_thread_.reset();
+    detail_cancel_.store(false, std::memory_order_relaxed);
+    detail_baking_.store(false, std::memory_order_relaxed);
+    detail_ready_.store(false, std::memory_order_relaxed);
+
     cached_seed_ = seed;
     cached_water_level_ = water_level;
 
-    auto bake_level = [&](TerrainCacheLevel& cache, int ppt) {
+    // Only macro + meso are baked synchronously (fast — ~2.5M pixels).
+    // Detail level (8.4M pixels) bakes in a background thread.
+    int macro_h = static_cast<int>(world.height) * 4;
+    int meso_h = static_cast<int>(world.height) * 8;
+    int total_rows = macro_h + meso_h;
+    int rows_done = 0;
+
+    auto bake_level = [&](TerrainCacheLevel& cache, int ppt, const char* stage) {
         int tex_w = static_cast<int>(world.width) * ppt;
         int tex_h = static_cast<int>(world.height) * ppt;
         float wpp = 1.0f / static_cast<float>(ppt);
 
         std::vector<uint32_t> pixels(static_cast<size_t>(tex_w) * tex_h);
-        render_terrain_region(world, 0.0f, 0.0f, wpp, tex_w, tex_h, seed,
-                              pixels.data(), tex_w, water_level);
 
-        if (cache.texture) SDL_DestroyTexture(cache.texture);
+        int base_rows = rows_done;
+        auto progress = [&](int row, int /*row_total*/) {
+            float pct = static_cast<float>(base_rows + row) / static_cast<float>(total_rows);
+            render_loading_screen(pct, stage);
+        };
+
+        render_terrain_region(world, 0.0f, 0.0f, wpp, tex_w, tex_h, seed, pixels.data(), tex_w,
+                              water_level, progress);
+        rows_done += tex_h;
+
+        if (cache.texture)
+            SDL_DestroyTexture(cache.texture);
         cache.texture = SDL_CreateTexture(renderer_, SDL_PIXELFORMAT_RGBA32,
                                           SDL_TEXTUREACCESS_STATIC, tex_w, tex_h);
         if (!cache.texture) {
@@ -221,24 +359,53 @@ void Renderer::bake_terrain_cache(const Terrain& world, uint32_t seed, float wat
         cache.valid = true;
     };
 
-    // L0 macro: 4 px/tile — used at zoom-out (whole world fits on screen)
-    bake_level(cache_macro_, 4);
+    render_loading_screen(0.0f, "Preparing...");
 
-    // L1 meso: 8 px/tile — used when zoomed in (256×128 world → 2048×1024 texture)
-    bake_level(cache_meso_, 8);
+    // L0 macro: 4 px/tile — planetary view
+    bake_level(cache_macro_, 4, "Macro level (4 px/tile)");
+
+    // L1 meso: 8 px/tile — regional view
+    bake_level(cache_meso_, 8, "Meso level (8 px/tile)");
+
+    // L2 detail: 16 px/tile — baked in background thread.
+    // User can interact immediately with macro/meso; detail swaps in when ready.
+    cache_detail_.valid = false;
+    detail_tex_w_ = static_cast<int>(world.width) * 16;
+    detail_tex_h_ = static_cast<int>(world.height) * 16;
+    detail_pixels_.resize(static_cast<size_t>(detail_tex_w_) * detail_tex_h_);
+
+    detail_baking_.store(true, std::memory_order_relaxed);
+    detail_ready_.store(false, std::memory_order_relaxed);
+    detail_cancel_.store(false, std::memory_order_relaxed);
+
+    // Capture what the thread needs (world is a reference — caller must keep it alive)
+    float wpp_detail = 1.0f / 16.0f;
+    detail_thread_ = std::make_unique<std::thread>([this, &world, wpp_detail, seed, water_level]() {
+        render_terrain_region(world, 0.0f, 0.0f, wpp_detail, detail_tex_w_, detail_tex_h_, seed,
+                              detail_pixels_.data(), detail_tex_w_, water_level, nullptr,
+                              &detail_cancel_);
+        if (!detail_cancel_.load(std::memory_order_relaxed)) {
+            detail_ready_.store(true, std::memory_order_release);
+        }
+    });
 }
 
 void Renderer::render_terrain(const Terrain& world, const Camera& cam, int win_w, int win_h,
-                              const DynamicState* dyn) {
-    // ── Clipmap terrain rendering ─────────────────────────────────────────
-    // Both levels baked once at startup. Just pick the right one and blit.
-    // Macro (4 px/tile) at low zoom, meso (8 px/tile) when zoomed in.
+                              const DynamicState* dyn, bool show_dynamic_tint) {
+    // ── Check for completed background detail bake ────────────────────
+    if (detail_ready_.load(std::memory_order_acquire)) {
+        finish_detail_bake();
+    }
 
+    // ── Clipmap terrain rendering ─────────────────────────────────────────
     float tile_screen = static_cast<float>(TILE_SIZE) * cam.zoom;
 
-    // Choose cache level based on zoom (meso at ~0.75x+ zoom)
+    // Choose cache level based on zoom:
+    // Detail (16 px/tile) at zoom >= 1.5x, meso (8 px/tile) at 0.5x+, macro (4 px/tile) below
     TerrainCacheLevel* active_cache = nullptr;
-    if (tile_screen > 6.0f && cache_meso_.valid) {
+    if (tile_screen > 24.0f && cache_detail_.valid) {
+        active_cache = &cache_detail_;
+    } else if (tile_screen > 6.0f && cache_meso_.valid) {
         active_cache = &cache_meso_;
     }
     if (!active_cache && cache_macro_.valid) {
@@ -249,16 +416,19 @@ void Renderer::render_terrain(const Terrain& world, const Camera& cam, int win_w
         // Compute screen rect for the cached region
         float wpp = active_cache->world_per_pixel;
         // World-to-screen: screen_x = (world_x * TILE_SIZE - cam.x) * cam.zoom + win_w/2
-        float screen_x0 = (active_cache->world_x0 * static_cast<float>(TILE_SIZE) - cam.x) * cam.zoom
-                          + static_cast<float>(win_w) / 2.0f;
-        float screen_y0 = (active_cache->world_y0 * static_cast<float>(TILE_SIZE) - cam.y) * cam.zoom
-                          + static_cast<float>(win_h) / 2.0f;
+        float screen_x0 =
+            (active_cache->world_x0 * static_cast<float>(TILE_SIZE) - cam.x) * cam.zoom +
+            static_cast<float>(win_w) / 2.0f;
+        float screen_y0 =
+            (active_cache->world_y0 * static_cast<float>(TILE_SIZE) - cam.y) * cam.zoom +
+            static_cast<float>(win_h) / 2.0f;
         // Each cache pixel covers wpp world units = wpp * TILE_SIZE * zoom screen pixels
         float px_scale = wpp * static_cast<float>(TILE_SIZE) * cam.zoom;
         int dst_w = static_cast<int>(static_cast<float>(active_cache->tex_w) * px_scale);
         int dst_h = static_cast<int>(static_cast<float>(active_cache->tex_h) * px_scale);
 
-        SDL_Rect dst_rect = {static_cast<int>(screen_x0), static_cast<int>(screen_y0), dst_w, dst_h};
+        SDL_Rect dst_rect = {static_cast<int>(screen_x0), static_cast<int>(screen_y0), dst_w,
+                             dst_h};
         SDL_RenderCopy(renderer_, active_cache->texture, nullptr, &dst_rect);
     } else {
         // Fallback: flat color rectangles (no cache available yet)
@@ -271,8 +441,8 @@ void Renderer::render_terrain(const Terrain& world, const Camera& cam, int win_w
         max_ty = std::min(max_ty + 1, static_cast<int>(world.height) - 1);
         for (int ty = min_ty; ty <= max_ty; ++ty) {
             for (int tx = min_tx; tx <= max_tx; ++tx) {
-                auto color = terrain_color(world.tile_at(
-                    static_cast<uint32_t>(tx), static_cast<uint32_t>(ty)));
+                auto color = terrain_color(
+                    world.tile_at(static_cast<uint32_t>(tx), static_cast<uint32_t>(ty)));
                 SDL_Rect dst = cam.tile_to_screen(tx, ty, TILE_SIZE, win_w, win_h);
                 SDL_SetRenderDrawColor(renderer_, color[0], color[1], color[2], 255);
                 SDL_RenderFillRect(renderer_, &dst);
@@ -281,29 +451,32 @@ void Renderer::render_terrain(const Terrain& world, const Camera& cam, int win_w
     }
 
     // ── Dynamic tinting overlay (wet/snow/water) ──────────────────────────
+    // Only shown when an overlay is active (show_dynamic_tint=true).
     // Drawn as semi-transparent colored rectangles on top of the terrain cache.
-    int min_tx, min_ty, max_tx, max_ty;
-    cam.screen_to_tile(0, 0, win_w, win_h, TILE_SIZE, min_tx, min_ty);
-    cam.screen_to_tile(win_w, win_h, win_w, win_h, TILE_SIZE, max_tx, max_ty);
-    min_tx = std::max(min_tx - 1, 0);
-    min_ty = std::max(min_ty - 1, 0);
-    max_tx = std::min(max_tx + 1, static_cast<int>(world.width) - 1);
-    max_ty = std::min(max_ty + 1, static_cast<int>(world.height) - 1);
+    if (dyn && show_dynamic_tint) {
+        int min_tx, min_ty, max_tx, max_ty;
+        cam.screen_to_tile(0, 0, win_w, win_h, TILE_SIZE, min_tx, min_ty);
+        cam.screen_to_tile(win_w, win_h, win_w, win_h, TILE_SIZE, max_tx, max_ty);
+        min_tx = std::max(min_tx - 1, 0);
+        min_ty = std::max(min_ty - 1, 0);
+        max_tx = std::min(max_tx + 1, static_cast<int>(world.width) - 1);
+        max_ty = std::min(max_ty + 1, static_cast<int>(world.height) - 1);
 
-    if (dyn) {
         SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_BLEND);
         for (int ty = min_ty; ty <= max_ty; ++ty) {
             for (int tx = min_tx; tx <= max_tx; ++tx) {
                 const TerrainTile& tile =
                     world.tile_at(static_cast<uint32_t>(tx), static_cast<uint32_t>(ty));
-                if (tile.is_ocean || tile.band == sandbox::ElevBand::Water) continue;
+                if (tile.is_ocean || tile.band == sandbox::ElevBand::Water)
+                    continue;
 
                 const auto& dt = dyn->tile_at(static_cast<uint32_t>(tx), static_cast<uint32_t>(ty));
                 SDL_Rect dst = cam.tile_to_screen(tx, ty, TILE_SIZE, win_w, win_h);
 
                 // Snow whitens terrain
                 if (dt.snow_depth > 0.01f) {
-                    uint8_t snow_a = static_cast<uint8_t>(std::clamp(dt.snow_depth * 200.0f, 0.0f, 180.0f));
+                    uint8_t snow_a =
+                        static_cast<uint8_t>(std::clamp(dt.snow_depth * 200.0f, 0.0f, 180.0f));
                     SDL_SetRenderDrawColor(renderer_, 240, 240, 255, snow_a);
                     SDL_RenderFillRect(renderer_, &dst);
                 }
@@ -679,7 +852,8 @@ void Renderer::render_wind_arrows(const ClimateData& climate, const Camera& cam,
             float ex = cx + dx * arrow_len;
             float ey = cy + dy * arrow_len;
 
-            // Neutral light gray at reduced opacity — visible but doesn't compete with scalar overlay
+            // Neutral light gray at reduced opacity — visible but doesn't compete with scalar
+            // overlay
             auto base_alpha = static_cast<uint8_t>(std::clamp(speed * 160.0f, 50.0f, 120.0f));
             auto alpha = static_cast<uint8_t>(static_cast<float>(base_alpha) * zoom_alpha_scale);
 

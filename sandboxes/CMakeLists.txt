@@ -1,5 +1,6 @@
 # Helper function for sandbox executables.
 # Sandboxes are standalone — they do NOT link darwin::* modules.
+find_package(Threads REQUIRED)
 function(add_darwin_sandbox name)
     set(target sandbox_${name})
     file(GLOB sources ${CMAKE_CURRENT_SOURCE_DIR}/*.cpp)
@@ -11,6 +12,7 @@ function(add_darwin_sandbox name)
         SDL2::SDL2
         FastNoiseLite
         darwin_warnings
+        Threads::Threads
     )
     target_compile_definitions(${target} PRIVATE
         ASSET_DIR="${PROJECT_SOURCE_DIR}/assets"

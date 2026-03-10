@@ -46,10 +46,10 @@ struct Theme {
     SDL_Color text_muted = {154, 166, 178, 255};
     SDL_Color text_bright = {242, 245, 248, 255};
 
-    SDL_Color accent = {231, 184, 76, 255};   // section headers (gold)
-    SDL_Color info = {110, 195, 240, 255};     // water/highlight (blue)
-    SDL_Color danger = {255, 80, 80, 255};     // warnings (red)
-    SDL_Color ok = {80, 220, 130, 255};        // positive (green)
+    SDL_Color accent = {231, 184, 76, 255};  // section headers (gold)
+    SDL_Color info = {110, 195, 240, 255};   // water/highlight (blue)
+    SDL_Color danger = {255, 80, 80, 255};   // warnings (red)
+    SDL_Color ok = {80, 220, 130, 255};      // positive (green)
 
     static const Theme& instance() {
         static Theme t;
@@ -88,8 +88,8 @@ inline Rect anchor_rect(int parent_w, int parent_h, Anchor anchor, int w, int h,
 // Like a CSS box with background, border, box-shadow, overflow:hidden.
 
 struct Panel {
-    SDL_Rect bounds;           // outer bounds (including border)
-    int padding = S2;          // inner padding (like CSS padding)
+    SDL_Rect bounds;   // outer bounds (including border)
+    int padding = S2;  // inner padding (like CSS padding)
 
     // Content area (bounds inset by padding+border) — for positioning children
     SDL_Rect content_rect() const {
@@ -157,17 +157,19 @@ inline int auto_width(std::initializer_list<const char*> lines, int font_scale, 
 }
 
 // Row height for a given font scale (glyph height + vertical gap).
-inline int row_height(int font_scale) { return font_scale * 7 + S1; }
+inline int row_height(int font_scale) {
+    return font_scale * 7 + S1;
+}
 
 // ── Layout helpers ─────────────────────────────────────────────────────────
 
 // Stack layout cursor: tracks Y position while adding rows to a column.
 // Like CSS flexbox column with gap.
 struct ColumnLayout {
-    int x;       // content left edge
-    int y;       // current Y cursor
-    int max_w;   // content max width (for right-alignment, separators)
-    int gap;     // gap between items (like CSS gap)
+    int x;      // content left edge
+    int y;      // current Y cursor
+    int max_w;  // content max width (for right-alignment, separators)
+    int gap;    // gap between items (like CSS gap)
 
     // Draw text at current position, advance cursor.
     // color is an SDL_Color for convenience.
@@ -190,14 +192,17 @@ struct ColumnLayout {
 };
 
 // Height consumed by a separator (sep_gap + 2px line).
-inline int separator_height(int sep_gap = S2) { return sep_gap + 2; }
+inline int separator_height(int sep_gap = S2) {
+    return sep_gap + 2;
+}
 
 // ── Tooltip ───────────────────────────────────────────────────────────────
 // Renders a small info box near the mouse cursor. Like CSS title/tooltip.
 
-inline void render_tooltip(SDL_Renderer* r, int mouse_x, int mouse_y, const char* text,
-                           int win_w, int win_h) {
-    if (!text || !text[0]) return;
+inline void render_tooltip(SDL_Renderer* r, int mouse_x, int mouse_y, const char* text, int win_w,
+                           int win_h) {
+    if (!text || !text[0])
+        return;
     constexpr int TT_SCALE = 1;
     constexpr int TT_PAD = 6;
     constexpr int TT_OFFSET = 16;  // distance from cursor
@@ -230,10 +235,14 @@ inline void render_tooltip(SDL_Renderer* r, int mouse_x, int mouse_y, const char
     // Position: prefer right+below cursor, flip if near edge
     int tx = mouse_x + TT_OFFSET;
     int ty = mouse_y + TT_OFFSET;
-    if (tx + tt_w > win_w - SAFE_R) tx = mouse_x - tt_w - 4;
-    if (ty + tt_h > win_h - SAFE_B) ty = mouse_y - tt_h - 4;
-    if (tx < SAFE_L) tx = SAFE_L;
-    if (ty < SAFE_T) ty = SAFE_T;
+    if (tx + tt_w > win_w - SAFE_R)
+        tx = mouse_x - tt_w - 4;
+    if (ty + tt_h > win_h - SAFE_B)
+        ty = mouse_y - tt_h - 4;
+    if (tx < SAFE_L)
+        tx = SAFE_L;
+    if (ty < SAFE_T)
+        ty = SAFE_T;
 
     // Draw bg + border
     const auto& t = Theme::instance();

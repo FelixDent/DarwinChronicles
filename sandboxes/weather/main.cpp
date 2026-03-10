@@ -1,5 +1,6 @@
 #include <SDL.h>
 
+#include <chrono>
 #include <csignal>
 #include <cstdlib>
 #include <fstream>
@@ -7,6 +8,7 @@
 #include <iostream>
 #include <sstream>
 #include <string>
+#include <thread>
 
 #include "atmosphere.h"
 #include "dynamics.h"
@@ -224,7 +226,10 @@ static int run_headless(int days, int preset_idx = 0) {
     // ── Reality-check tracking ──────────────────────────────────────────
     // Track wind direction at 6 sample cells over time (sampled every ~0.5 days)
     // to measure temporal decorrelation — the key test for "does wind change direction?"
-    struct SamplePoint { uint32_t x, y; const char* label; };
+    struct SamplePoint {
+        uint32_t x, y;
+        const char* label;
+    };
     SamplePoint samples[] = {
         {atmosphere.width / 4, atmosphere.height / 4, "NW-mid"},
         {atmosphere.width / 2, atmosphere.height / 4, "N-center"},
@@ -272,7 +277,8 @@ static int run_headless(int days, int preset_idx = 0) {
             }
             avg_diag.displacement_p50 += tick_diag.displacement_p50;
             avg_diag.displacement_p90 += tick_diag.displacement_p90;
-            avg_diag.displacement_max = std::max(avg_diag.displacement_max, tick_diag.displacement_max);
+            avg_diag.displacement_max =
+                std::max(avg_diag.displacement_max, tick_diag.displacement_max);
             avg_diag.frac_sub_tenth += tick_diag.frac_sub_tenth;
             avg_diag_count++;
         }
@@ -401,12 +407,14 @@ static int run_headless(int days, int preset_idx = 0) {
     // Real weather: wind direction at a point changes over days (decorrelation ~3-7 days)
     // Fake weather: wind direction stays ~constant (autocorrelation stays near 1.0)
     std::cout << "\n--- RC1: Wind Direction Temporal Variability ---\n";
-    std::cout << "  (autocorrelation of wind angle at lag 1,3,7,14 days — real weather decorrelates by lag 3-7)\n";
+    std::cout << "  (autocorrelation of wind angle at lag 1,3,7,14 days — real weather "
+                 "decorrelates by lag 3-7)\n";
     for (int si = 0; si < N_SAMPLES; ++si) {
         const auto& hist = wind_history[si];
-        if (hist.size() < 30) continue;
-        std::cout << "  " << samples[si].label << " (" << samples[si].x << ","
-                  << samples[si].y << "): n=" << hist.size();
+        if (hist.size() < 30)
+            continue;
+        std::cout << "  " << samples[si].label << " (" << samples[si].x << "," << samples[si].y
+                  << "): n=" << hist.size();
 
         // Compute circular autocorrelation at various lags
         // Lag in samples (each sample = 0.5 days)
@@ -422,7 +430,8 @@ static int run_headless(int days, int preset_idx = 0) {
             double corr_sum = 0;
             int corr_count = 0;
             for (size_t t = 0; t + static_cast<size_t>(lag) < hist.size(); ++t) {
-                corr_sum += std::cos(static_cast<double>(hist[t] - hist[t + static_cast<size_t>(lag)]));
+                corr_sum +=
+                    std::cos(static_cast<double>(hist[t] - hist[t + static_cast<size_t>(lag)]));
                 corr_count++;
             }
             float autocorr = (corr_count > 0) ? static_cast<float>(corr_sum / corr_count) : 0.0f;
@@ -431,14 +440,20 @@ static int run_headless(int days, int preset_idx = 0) {
 
         // Also print the actual wind direction range (min/max angle)
         float dir_sum_sin = 0, dir_sum_cos = 0;
-        for (float a : hist) { dir_sum_sin += std::sin(a); dir_sum_cos += std::cos(a); }
-        float mean_resultant = std::sqrt(dir_sum_sin * dir_sum_sin + dir_sum_cos * dir_sum_cos)
-                               / static_cast<float>(hist.size());
+        for (float a : hist) {
+            dir_sum_sin += std::sin(a);
+            dir_sum_cos += std::cos(a);
+        }
+        float mean_resultant = std::sqrt(dir_sum_sin * dir_sum_sin + dir_sum_cos * dir_sum_cos) /
+                               static_cast<float>(hist.size());
         std::cout << "  MRL=" << std::setprecision(2) << mean_resultant;
         // MRL close to 1 = always same direction. Close to 0 = uniformly varied.
-        if (mean_resultant > 0.7f) std::cout << " FAIL:constant";
-        else if (mean_resultant > 0.4f) std::cout << " WARN:biased";
-        else std::cout << " OK:varied";
+        if (mean_resultant > 0.7f)
+            std::cout << " FAIL:constant";
+        else if (mean_resultant > 0.4f)
+            std::cout << " WARN:biased";
+        else
+            std::cout << " OK:varied";
         std::cout << "\n";
     }
 
@@ -460,13 +475,15 @@ static int run_headless(int days, int preset_idx = 0) {
                 const auto& r = atmosphere.cell_at(ax_r, ay);
                 float angle_r = std::atan2(r.v, r.u);
                 float diff = std::abs(angle_c - angle_r);
-                if (diff > 3.14159f) diff = 6.28318f - diff;
+                if (diff > 3.14159f)
+                    diff = 6.28318f - diff;
                 adj_diffs.push_back(diff);
                 // Down neighbor
                 const auto& d = atmosphere.cell_at(ax, ay + 1);
                 float angle_d = std::atan2(d.v, d.u);
                 diff = std::abs(angle_c - angle_d);
-                if (diff > 3.14159f) diff = 6.28318f - diff;
+                if (diff > 3.14159f)
+                    diff = 6.28318f - diff;
                 adj_diffs.push_back(diff);
             }
         }
@@ -480,9 +497,12 @@ static int run_headless(int days, int preset_idx = 0) {
                   << " max=" << pct(1.0f) << "\n";
         // At 625km grid cells, cells within the same weather system (500-1500km) SHOULD
         // have similar wind direction. Median diff of 5-15 deg is realistic.
-        if (pct(0.5f) < 3.0f) std::cout << "  FAIL: median diff < 3 deg — wind is spatially uniform\n";
-        else if (pct(0.5f) < 8.0f) std::cout << "  WARN: median diff 3-8 deg — limited spatial structure\n";
-        else std::cout << "  OK: median diff >= 8 deg — good spatial variation\n";
+        if (pct(0.5f) < 3.0f)
+            std::cout << "  FAIL: median diff < 3 deg — wind is spatially uniform\n";
+        else if (pct(0.5f) < 8.0f)
+            std::cout << "  WARN: median diff 3-8 deg — limited spatial structure\n";
+        else
+            std::cout << "  OK: median diff >= 8 deg — good spatial variation\n";
     }
 
     // RC3: Precipitation intermittency
@@ -492,23 +512,29 @@ static int run_headless(int days, int preset_idx = 0) {
         std::vector<float> rain_fracs;
         uint32_t always_dry = 0, always_wet = 0;
         for (size_t i = 0; i < atmosphere.cells.size(); ++i) {
-            float frac = static_cast<float>(rain_day_count[i]) / static_cast<float>(rain_snapshot_count);
+            float frac =
+                static_cast<float>(rain_day_count[i]) / static_cast<float>(rain_snapshot_count);
             rain_fracs.push_back(frac);
-            if (frac < 0.01f) always_dry++;
-            if (frac > 0.9f) always_wet++;
+            if (frac < 0.01f)
+                always_dry++;
+            if (frac > 0.9f)
+                always_wet++;
         }
         std::sort(rain_fracs.begin(), rain_fracs.end());
         auto pct = [&](float p) {
             return rain_fracs[static_cast<size_t>(p * static_cast<float>(rain_fracs.size() - 1))];
         };
         std::cout << "  Rain fraction per cell: p10=" << std::setprecision(2) << pct(0.1f)
-                  << " p25=" << pct(0.25f) << " p50=" << pct(0.5f)
-                  << " p75=" << pct(0.75f) << " p90=" << pct(0.9f) << "\n";
-        std::cout << "  Always dry (<1%): " << always_dry << "/"
-                  << atmosphere.cells.size() << "  Always wet (>90%): " << always_wet << "\n";
-        if (pct(0.5f) < 0.02f) std::cout << "  FAIL: most cells never see rain\n";
-        else if (always_wet > atmosphere.cells.size() / 4) std::cout << "  FAIL: >25% cells always raining\n";
-        else std::cout << "  OK: intermittent precipitation\n";
+                  << " p25=" << pct(0.25f) << " p50=" << pct(0.5f) << " p75=" << pct(0.75f)
+                  << " p90=" << pct(0.9f) << "\n";
+        std::cout << "  Always dry (<1%): " << always_dry << "/" << atmosphere.cells.size()
+                  << "  Always wet (>90%): " << always_wet << "\n";
+        if (pct(0.5f) < 0.02f)
+            std::cout << "  FAIL: most cells never see rain\n";
+        else if (always_wet > atmosphere.cells.size() / 4)
+            std::cout << "  FAIL: >25% cells always raining\n";
+        else
+            std::cout << "  OK: intermittent precipitation\n";
     }
 
     // RC4: T_anom spatial autocorrelation length
@@ -520,7 +546,8 @@ static int run_headless(int days, int preset_idx = 0) {
         std::cout << "  T_anom zonal autocorrelation: ";
         int sep_lags[] = {1, 2, 4, 8, 16, 32};
         for (int lag : sep_lags) {
-            if (static_cast<uint32_t>(lag) >= aw / 2) break;
+            if (static_cast<uint32_t>(lag) >= aw / 2)
+                break;
             double corr_num = 0, var = 0;
             int cnt = 0;
             for (uint32_t ay = 2; ay + 2 < ah; ++ay) {
@@ -556,15 +583,21 @@ int main(int argc, char* argv[]) {
     // --headless-diag N [preset]: detailed atmosphere diagnostics for GPT analysis
     if (argc >= 2 && std::string(argv[1]) == "--headless-diag") {
         int days = (argc >= 3) ? std::atoi(argv[2]) : 120;
-        if (days <= 0) days = 120;
+        if (days <= 0)
+            days = 120;
         int preset = 3;  // default: Continental
         if (argc >= 4) {
             std::string arg = argv[3];
             bool found = false;
             for (int p = 0; p < NUM_PRESETS; ++p) {
-                if (arg == PRESETS[p].name) { preset = p; found = true; break; }
+                if (arg == PRESETS[p].name) {
+                    preset = p;
+                    found = true;
+                    break;
+                }
             }
-            if (!found) preset = std::atoi(argv[3]);
+            if (!found)
+                preset = std::atoi(argv[3]);
         }
         preset = std::clamp(preset, 0, NUM_PRESETS - 1);
         const auto& pr = PRESETS[preset];
@@ -611,7 +644,8 @@ int main(int argc, char* argv[]) {
                 }
                 avg_diag.displacement_p50 += tick_diag_d.displacement_p50;
                 avg_diag.displacement_p90 += tick_diag_d.displacement_p90;
-                avg_diag.displacement_max = std::max(avg_diag.displacement_max, tick_diag_d.displacement_max);
+                avg_diag.displacement_max =
+                    std::max(avg_diag.displacement_max, tick_diag_d.displacement_max);
                 avg_diag.frac_sub_tenth += tick_diag_d.frac_sub_tenth;
                 avg_diag_count++;
             }
@@ -632,21 +666,17 @@ int main(int argc, char* argv[]) {
                     }
                 }
 
-                printf("%3.0f | %6.1f %5.1f | %6.1f %6.1f %6.1f | ",
-                       dynamics.elapsed_days, as.T_mean, as.T_stddev,
-                       band_n[0] > 0 ? band_T[0] / band_n[0] : 0,
+                printf("%3.0f | %6.1f %5.1f | %6.1f %6.1f %6.1f | ", dynamics.elapsed_days,
+                       as.T_mean, as.T_stddev, band_n[0] > 0 ? band_T[0] / band_n[0] : 0,
                        band_n[7] > 0 ? band_T[7] / band_n[7] : 0,
                        band_n[15] > 0 ? band_T[15] / band_n[15] : 0);
-                printf("%6.4f %6.4f %6.4f %5.3f %6.4f | ",
-                       as.q_mean, as.cloud_mean, as.precip_mean, as.precip_stddev, as.storm_max);
-                printf("%5.2f %5.2f | ",
-                       as.wind_max * 0.95f, as.wind_max);  // approximate p95 as 0.95*max
-                printf("%8.0f %6.2f | ",
-                       atmosphere.total_energy, as.energy_drift_pct);
-                printf("%7.3f %8.6f | ",
-                       atmosphere.total_water, atmosphere.last_water_correction);
-                printf("%5.3f %5.3f\n",
-                       as.budget_mean, as.budget_min);
+                printf("%6.4f %6.4f %6.4f %5.3f %6.4f | ", as.q_mean, as.cloud_mean, as.precip_mean,
+                       as.precip_stddev, as.storm_max);
+                printf("%5.2f %5.2f | ", as.wind_max * 0.95f,
+                       as.wind_max);  // approximate p95 as 0.95*max
+                printf("%8.0f %6.2f | ", atmosphere.total_energy, as.energy_drift_pct);
+                printf("%7.3f %8.6f | ", atmosphere.total_water, atmosphere.last_water_correction);
+                printf("%5.3f %5.3f\n", as.budget_mean, as.budget_min);
             }
 
             // Print detailed snapshot at checkpoints
@@ -661,9 +691,11 @@ int main(int argc, char* argv[]) {
                     printf("\n--- VARIANCE BUDGET (averaged over %.0f ticks) ---\n", n);
                     printf("  Step:      start    advect   diffuse  vert_ex  solar    moisture\n");
                     printf("  T_anom: ");
-                    for (int i = 0; i < 6; ++i) printf(" %8.4f", avg_diag.T_anom_var[i] / n);
+                    for (int i = 0; i < 6; ++i)
+                        printf(" %8.4f", avg_diag.T_anom_var[i] / n);
                     printf("\n  q_anom: ");
-                    for (int i = 0; i < 6; ++i) printf(" %8.4f", avg_diag.q_anom_var[i] / n);
+                    for (int i = 0; i < 6; ++i)
+                        printf(" %8.4f", avg_diag.q_anom_var[i] / n);
                     printf("\n  T_anom ratios (vs start): ");
                     float T0 = avg_diag.T_anom_var[0] / n;
                     if (T0 > 0) {
@@ -694,12 +726,19 @@ int main(int argc, char* argv[]) {
             std::string arg = argv[2];
             bool found = false;
             for (int p = 0; p < NUM_PRESETS; ++p) {
-                if (arg == PRESETS[p].name) { preset = p; found = true; break; }
+                if (arg == PRESETS[p].name) {
+                    preset = p;
+                    found = true;
+                    break;
+                }
             }
-            if (!found) preset = std::atoi(argv[2]);
+            if (!found)
+                preset = std::atoi(argv[2]);
         }
-        if (argc >= 4) sim_days = std::atoi(argv[3]);
-        if (sim_days <= 0) sim_days = 30;
+        if (argc >= 4)
+            sim_days = std::atoi(argv[3]);
+        if (sim_days <= 0)
+            sim_days = 30;
         preset = std::clamp(preset, 0, NUM_PRESETS - 1);
         const auto& pr = PRESETS[preset];
 
@@ -743,8 +782,8 @@ int main(int argc, char* argv[]) {
             return 1;
         }
 
-        SDL_Surface* surface = SDL_CreateRGBSurfaceWithFormat(
-            0, WIN_W, WIN_H, 32, SDL_PIXELFORMAT_RGBA32);
+        SDL_Surface* surface =
+            SDL_CreateRGBSurfaceWithFormat(0, WIN_W, WIN_H, 32, SDL_PIXELFORMAT_RGBA32);
         if (!surface) {
             std::cerr << "Surface creation failed: " << SDL_GetError() << "\n";
             SDL_Quit();
@@ -761,6 +800,13 @@ int main(int argc, char* argv[]) {
         Renderer tile_renderer;
         tile_renderer.init(sw_renderer);
         tile_renderer.bake_terrain_cache(terrain, pr.seed, pr.env.water_level);
+
+        // Screenshots need detail level — wait for background bake to finish
+        while (tile_renderer.is_detail_baking()) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        }
+        // Force finalize (render_terrain would do this, but we call it explicitly)
+        tile_renderer.render_terrain(terrain, Camera{}, 1, 1);
 
         // Camera centered on world
         Camera cam;
@@ -815,13 +861,11 @@ int main(int argc, char* argv[]) {
             // Overlay
             if (cap.mode != OverlayMode::None) {
                 if (cap.mode == OverlayMode::SurfaceWater ||
-                    cap.mode == OverlayMode::SoilMoisture ||
-                    cap.mode == OverlayMode::SnowDepth ||
-                    cap.mode == OverlayMode::Aridity ||
-                    cap.mode == OverlayMode::Groundwater ||
+                    cap.mode == OverlayMode::SoilMoisture || cap.mode == OverlayMode::SnowDepth ||
+                    cap.mode == OverlayMode::Aridity || cap.mode == OverlayMode::Groundwater ||
                     cap.mode == OverlayMode::Discharge) {
-                    tile_renderer.render_dynamic_overlay(terrain, dynamics, frame_cam, WIN_W,
-                                                         WIN_H, cap.mode);
+                    tile_renderer.render_dynamic_overlay(terrain, dynamics, frame_cam, WIN_W, WIN_H,
+                                                         cap.mode);
                 } else if (cap.mode == OverlayMode::MoistureBars) {
                     tile_renderer.render_moisture_bars(terrain, climate, frame_cam, WIN_W, WIN_H,
                                                        &dynamics, &atmosphere);
@@ -854,8 +898,7 @@ int main(int argc, char* argv[]) {
                 render_button(sw_renderer, bx, BTN_MARGIN, "REBAKE", false);
                 bx += 70 + BTN_GAP + 20;
                 char ov_label[64];
-                std::snprintf(ov_label, sizeof(ov_label), "OVERLAY: %s",
-                              overlay_name(cap.mode));
+                std::snprintf(ov_label, sizeof(ov_label), "OVERLAY: %s", overlay_name(cap.mode));
                 render_button(sw_renderer, bx, BTN_MARGIN, ov_label, false);
             }
 
@@ -890,7 +933,8 @@ int main(int argc, char* argv[]) {
                     break;
                 }
             }
-            if (!found) preset_idx = std::atoi(argv[2]);
+            if (!found)
+                preset_idx = std::atoi(argv[2]);
         }
         uint32_t seed_override = 0;
         bool use_override = false;
@@ -913,10 +957,8 @@ int main(int argc, char* argv[]) {
             const char* name;
             int cx, cy;
         };
-        SampleRegion regions[4] = {{"coast", -1, -1},
-                                    {"mountain", -1, -1},
-                                    {"lowland", -1, -1},
-                                    {"mixed", -1, -1}};
+        SampleRegion regions[4] = {
+            {"coast", -1, -1}, {"mountain", -1, -1}, {"lowland", -1, -1}, {"mixed", -1, -1}};
 
         // Scan terrain for good sample centers
         for (uint32_t y = 16; y < WORLD_H - 16; ++y) {
@@ -972,15 +1014,16 @@ int main(int argc, char* argv[]) {
 
                 SDL_Surface* surf = SDL_CreateRGBSurfaceWithFormat(0, patch_px, patch_px, 32,
                                                                    SDL_PIXELFORMAT_RGBA32);
-                if (!surf) continue;
+                if (!surf)
+                    continue;
                 SDL_LockSurface(surf);
                 render_tile_patch(terrain, px, py, patch_tiles, patch_tiles, seed,
                                   static_cast<uint32_t*>(surf->pixels), surf->pitch / 4,
                                   pr.env.water_level);
                 SDL_UnlockSurface(surf);
 
-                std::string fname = "tiles_" + std::string(pr.name) + "_" + reg.name + "_" +
-                                    zoom.suffix + ".bmp";
+                std::string fname =
+                    "tiles_" + std::string(pr.name) + "_" + reg.name + "_" + zoom.suffix + ".bmp";
                 SDL_SaveBMP(surf, fname.c_str());
                 SDL_FreeSurface(surf);
                 std::cout << "  Saved: " << fname << " (" << patch_tiles << "x" << patch_tiles
@@ -999,8 +1042,7 @@ int main(int argc, char* argv[]) {
                 // Render in strips to avoid huge single allocation
                 for (int strip_y = 0; strip_y < static_cast<int>(WORLD_H); strip_y += 16) {
                     int strip_h = std::min(16, static_cast<int>(WORLD_H) - strip_y);
-                    render_tile_patch(terrain, 0, strip_y, static_cast<int>(WORLD_W), strip_h,
-                                      seed,
+                    render_tile_patch(terrain, 0, strip_y, static_cast<int>(WORLD_W), strip_h, seed,
                                       static_cast<uint32_t*>(surf->pixels) +
                                           strip_y * TilePixels::SIZE * (surf->pitch / 4),
                                       surf->pitch / 4, pr.env.water_level);
@@ -1009,8 +1051,7 @@ int main(int argc, char* argv[]) {
                 std::string fname = "tiles_" + std::string(pr.name) + "_planetary.bmp";
                 SDL_SaveBMP(surf, fname.c_str());
                 SDL_FreeSurface(surf);
-                std::cout << "  Saved: " << fname << " (full world " << pw << "x" << ph
-                          << "px)\n";
+                std::cout << "  Saved: " << fname << " (full world " << pw << "x" << ph << "px)\n";
             }
         }
 
@@ -1547,7 +1588,7 @@ int main(int argc, char* argv[]) {
 
         bool overlay_active = weather_baked && overlay != OverlayMode::None;
         tile_renderer.render_terrain(terrain, cam, win_w, win_h,
-                                     weather_baked ? &dynamics : nullptr);
+                                     weather_baked ? &dynamics : nullptr, overlay_active);
 
         // Weather overlays (only if baked)
         if (overlay_active) {

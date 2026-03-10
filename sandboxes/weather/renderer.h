@@ -2,7 +2,10 @@
 
 #include <SDL.h>
 
+#include <atomic>
 #include <cstdint>
+#include <memory>
+#include <thread>
 #include <vector>
 
 #include "atmosphere.h"
@@ -69,13 +72,13 @@ struct Camera {
 // incrementally as the camera moves (only dirty strips regenerated).
 
 struct TerrainCacheLevel {
-    SDL_Texture* texture = nullptr;    // GPU texture, RGBA32
-    int tex_w = 0, tex_h = 0;         // texture dimensions (pixels)
-    float world_x0 = 0.0f;            // world-space left edge (tile coords)
-    float world_y0 = 0.0f;            // world-space top edge
-    float world_per_pixel = 1.0f;     // world-space units per output pixel
-    bool valid = false;                // true if cache matches current camera
-    uint32_t seed = 0;                 // terrain seed used for generation
+    SDL_Texture* texture = nullptr;  // GPU texture, RGBA32
+    int tex_w = 0, tex_h = 0;        // texture dimensions (pixels)
+    float world_x0 = 0.0f;           // world-space left edge (tile coords)
+    float world_y0 = 0.0f;           // world-space top edge
+    float world_per_pixel = 1.0f;    // world-space units per output pixel
+    bool valid = false;              // true if cache matches current camera
+    uint32_t seed = 0;               // terrain seed used for generation
 };
 
 // ── Renderer ────────────────────────────────────────────────────────────────
@@ -92,7 +95,7 @@ public:
     void bake_terrain_cache(const Terrain& world, uint32_t seed, float water_level = 0.45f);
 
     void render_terrain(const Terrain& world, const Camera& cam, int win_w, int win_h,
-                        const DynamicState* dyn = nullptr);
+                        const DynamicState* dyn = nullptr, bool show_dynamic_tint = true);
     void render_weather_overlay(const Terrain& world, const ClimateData& climate, const Camera& cam,
                                 int win_w, int win_h, OverlayMode mode,
                                 const DynamicState* dyn = nullptr,
@@ -108,14 +111,29 @@ public:
     // Invalidate terrain cache (e.g., after terrain regeneration or preset change)
     void invalidate_terrain_cache();
 
+    // Check if detail level is still baking in background
+    bool is_detail_baking() const { return detail_baking_.load(std::memory_order_relaxed); }
+
 private:
     SDL_Renderer* renderer_ = nullptr;
 
-    // Terrain clipmap: L0 = macro (whole world), L1 = meso (camera region)
-    TerrainCacheLevel cache_macro_;   // whole world, baked once (~4 px/tile)
-    TerrainCacheLevel cache_meso_;    // camera region (~16 px/tile)
+    // Terrain clipmap: L0 = macro, L1 = meso, L2 = detail
+    TerrainCacheLevel cache_macro_;   // whole world (~4 px/tile)
+    TerrainCacheLevel cache_meso_;    // whole world (~8 px/tile)
+    TerrainCacheLevel cache_detail_;  // whole world (~16 px/tile)
     float cached_water_level_ = 0.45f;
     uint32_t cached_seed_ = 0;
+
+    // Background detail bake state
+    std::unique_ptr<std::thread> detail_thread_;
+    std::vector<uint32_t> detail_pixels_;  // CPU buffer filled by bg thread
+    int detail_tex_w_ = 0, detail_tex_h_ = 0;
+    std::atomic<bool> detail_baking_{false};  // true while bg thread is working
+    std::atomic<bool> detail_ready_{false};   // true when pixels are ready for upload
+    std::atomic<bool> detail_cancel_{false};  // set true to abort bg thread early
+
+    void render_loading_screen(float progress, const char* stage);
+    void finish_detail_bake();  // join thread + upload texture (called from render)
 };
 
 // ── UI Buttons ──────────────────────────────────────────────────────────────
@@ -126,6 +144,7 @@ struct ButtonRect {
 };
 
 ButtonRect render_button(SDL_Renderer* renderer, int x, int y, const char* label, bool hovered);
-ButtonRect render_status_chip(SDL_Renderer* renderer, int x, int y, const char* label, bool hovered);
+ButtonRect render_status_chip(SDL_Renderer* renderer, int x, int y, const char* label,
+                              bool hovered);
 
 }  // namespace sandbox

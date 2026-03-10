@@ -579,8 +579,7 @@ WeatherStats compute_live_weather_stats(const AtmosphereState& atmo, const Dynam
                         world.tile_at(static_cast<uint32_t>(ux), static_cast<uint32_t>(uy));
                     float elev_diff = uptt.elev01 - tt.elev01;
                     if (elev_diff > 0.08f && uptt.elev01 > 0.45f) {
-                        float dist_decay =
-                            1.0f - static_cast<float>(step - 1) / 12.0f;
+                        float dist_decay = 1.0f - static_cast<float>(step - 1) / 12.0f;
                         float s = std::clamp(elev_diff * 3.0f, 0.0f, 1.0f) * dist_decay;
                         best_shadow = std::max(best_shadow, s);
                     }

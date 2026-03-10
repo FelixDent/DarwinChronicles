@@ -78,18 +78,18 @@ SDL_Color dist_color(float dist, float max_dist) {
     return {r, g, b, 180};
 }
 
-SDL_Color fertility_color(float fertility) {
-    // Brown (low) -> green (high)
-    float t = std::clamp(fertility, 0.0f, 1.0f);
-    auto r = static_cast<uint8_t>(180.0f * (1.0f - t) + 40.0f * t);
-    auto g = static_cast<uint8_t>(120.0f * (1.0f - t) + 200.0f * t);
+SDL_Color erodibility_color(float erodibility) {
+    // Green (low erodibility = resistant) -> red (high erodibility = easily eroded)
+    float t = std::clamp(erodibility, 0.0f, 1.0f);
+    auto r = static_cast<uint8_t>(40.0f * (1.0f - t) + 200.0f * t);
+    auto g = static_cast<uint8_t>(180.0f * (1.0f - t) + 80.0f * t);
     auto b = static_cast<uint8_t>(60.0f * (1.0f - t) + 60.0f * t);
     return {r, g, b, 200};
 }
 
-SDL_Color soil_hold_color(float hold) {
-    // Tan (low) -> dark brown (high)
-    float t = std::clamp(hold, 0.0f, 1.0f);
+SDL_Color soil_depth_color(float depth) {
+    // Tan (shallow) -> dark brown (deep)
+    float t = std::clamp(depth / 3.0f, 0.0f, 1.0f);  // soil_depth is [0..3] meters
     auto r = static_cast<uint8_t>(220.0f * (1.0f - t) + 80.0f * t);
     auto g = static_cast<uint8_t>(200.0f * (1.0f - t) + 60.0f * t);
     auto b = static_cast<uint8_t>(140.0f * (1.0f - t) + 30.0f * t);
@@ -181,8 +181,8 @@ TerrainStats compute_stats(const Terrain& terrain) {
     heights.reserve(terrain.tiles.size());
     slopes.reserve(terrain.tiles.size());
 
-    double fertility_sum = 0.0;
-    double hold_sum = 0.0;
+    double erodibility_sum = 0.0;
+    double soil_depth_sum = 0.0;
     uint32_t land_count = 0;
 
     for (const auto& tile : terrain.tiles) {
@@ -201,15 +201,17 @@ TerrainStats compute_stats(const Terrain& terrain) {
 
         if (!tile.is_ocean) {
             roughnesses.push_back(tile.roughness);
-            fertility_sum += static_cast<double>(tile.soil_fertility);
-            hold_sum += static_cast<double>(tile.soil_hold);
+            erodibility_sum += static_cast<double>(tile.erodibility);
+            soil_depth_sum += static_cast<double>(tile.soil_depth);
             ++land_count;
         }
     }
 
     if (land_count > 0) {
-        stats.fertility_mean = static_cast<float>(fertility_sum / static_cast<double>(land_count));
-        stats.soil_hold_mean = static_cast<float>(hold_sum / static_cast<double>(land_count));
+        stats.erodibility_mean =
+            static_cast<float>(erodibility_sum / static_cast<double>(land_count));
+        stats.soil_depth_mean =
+            static_cast<float>(soil_depth_sum / static_cast<double>(land_count));
     }
 
     field_stats(heights, stats.height_min, stats.height_max, stats.height_mean,
@@ -254,8 +256,8 @@ void print_stats(const TerrainStats& stats) {
     print_field("Slope", stats.slope_min, stats.slope_max, stats.slope_mean);
     print_field("Roughness", stats.roughness_min, stats.roughness_max, stats.roughness_mean);
     std::cout << "  Max dist_ocean: " << stats.dist_ocean_max << "\n";
-    std::cout << "  Mean fertility: " << stats.fertility_mean << "\n";
-    std::cout << "  Mean soil hold: " << stats.soil_hold_mean << "\n\n";
+    std::cout << "  Mean erodibility: " << stats.erodibility_mean << "\n";
+    std::cout << "  Mean soil depth: " << stats.soil_depth_mean << "\n\n";
 }
 
 // ── FPS counter ─────────────────────────────────────────────────────────────
@@ -322,10 +324,10 @@ void render_overlay(SDL_Renderer* renderer, const Terrain& terrain, const Terrai
                     c = aspect_color(tile.aspect);
                     break;
                 case OverlayMode::Geology:
-                    c = fertility_color(tile.soil_fertility);
+                    c = erodibility_color(tile.erodibility);
                     break;
                 case OverlayMode::SoilTexture:
-                    c = soil_hold_color(tile.soil_hold);
+                    c = soil_depth_color(tile.soil_depth);
                     break;
                 default:
                     continue;
@@ -496,8 +498,8 @@ static int glyph_index(char ch) {
     return 0;  // Default to space
 }
 
-static void draw_text(SDL_Renderer* renderer, int x, int y, const char* text, int scale, uint8_t r,
-                      uint8_t g, uint8_t b) {
+void draw_text(SDL_Renderer* renderer, int x, int y, const char* text, int scale, uint8_t r,
+               uint8_t g, uint8_t b) {
     SDL_SetRenderDrawColor(renderer, r, g, b, 255);
     int cursor_x = x;
     for (const char* p = text; *p; ++p) {
@@ -518,7 +520,7 @@ static void draw_text(SDL_Renderer* renderer, int x, int y, const char* text, in
 
 // ── Legend rendering ────────────────────────────────────────────────────────
 
-static int text_pixel_width(const char* text, int scale) {
+int text_pixel_width(const char* text, int scale) {
     int len = 0;
     for (const char* p = text; *p; ++p)
         ++len;
@@ -750,18 +752,18 @@ void render_overlay_legend(SDL_Renderer* renderer, const TerrainStats& stats, Ov
             color_fn = aspect_color;
             break;
         case OverlayMode::Geology:
-            desc = "Fertility";
-            info = "Soil fertility (noise - slope + water proximity)";
-            lo_label = "Low";
-            hi_label = "High";
-            color_fn = fertility_color;
+            desc = "Erodibility";
+            info = "Susceptibility to erosion (geology-based)";
+            lo_label = "Resistant";
+            hi_label = "Erodible";
+            color_fn = erodibility_color;
             break;
         case OverlayMode::SoilTexture:
-            desc = "Soil Hold";
-            info = "Material noise + lowland bonus";
-            lo_label = "Low";
-            hi_label = "High";
-            color_fn = soil_hold_color;
+            desc = "Soil Depth";
+            info = "Regolith depth in meters (0-3m)";
+            lo_label = "Shallow";
+            hi_label = "Deep";
+            color_fn = soil_depth_color;
             break;
         default:
             return;
