@@ -517,9 +517,9 @@ UI buttons for Prev, Next, and Rebake are rendered at the top of the window, alo
 
 Source: `sandboxes/weather/renderer.h`, `sandboxes/weather/renderer.cpp`, `sandboxes/weather/tile_texture.h`, `sandboxes/weather/tile_texture.cpp`
 
-### Terrain Rendering (Clipmap + Procedural Texture)
+### Terrain Rendering (Clipmap + Autotile Templates)
 
-Terrain is rendered through a two-level clipmap texture cache rather than per-tile flat-color rectangles, providing geologically-grounded visual detail at any zoom level without per-frame overdraw.
+Terrain is rendered through a two-level clipmap texture cache that drives a discrete autotile template system, providing SNES/GBA-style pixel art terrain at any zoom level without per-frame overdraw.
 
 **Cache levels** (defined by `TerrainCacheLevel`):
 
@@ -528,20 +528,48 @@ Terrain is rendered through a two-level clipmap texture cache rather than per-ti
 | L0 | Macro | 4 px/tile | Whole world | Baked once at startup via `bake_terrain_cache()` |
 | L1 | Meso | 16 px/tile | Visible camera region + 2-tile margin | Regenerated when camera pans > 2 tiles via `update_meso_cache()` |
 
-At zoom below ~6 screen-pixels-per-tile the macro level is displayed; above that threshold the meso level is blitted. A flat-color per-tile fallback fires only when no cache is available (e.g., before `bake_terrain_cache()` has completed). `bake_terrain_cache(world, seed, water_level)` must be called once after terrain generation and again after any preset change. `invalidate_terrain_cache()` destroys both textures and resets validity flags (called from `Renderer::shutdown()`).
+At zoom below ~6 screen-pixels-per-tile the macro level is displayed; above that threshold the meso level is blitted. A flat-color per-tile fallback fires only when no cache is available (e.g., before `bake_terrain_cache()` has completed). `bake_terrain_cache(world, seed, water_level)` must be called once after terrain generation and again after any preset change. `invalidate_terrain_cache()` destroys both textures and resets validity flags (called from `Renderer::shutdown()`). `generate_template_atlas(atlas, seed)` must be called before the first `bake_terrain_cache()` call.
 
-**Procedural pixel evaluator** (`tile_texture.h/cpp`):
+**Autotile classification** (`tile_texture.h/cpp`):
 
-`eval_terrain_pixel(terrain, world_x, world_y, pixels_per_tile, seed, water_level)` evaluates one RGBA32 pixel at arbitrary sub-tile world-space coordinates. `render_terrain_region()` fills a caller-owned pixel buffer for a rectangular patch (used by both cache levels). Noise octaves are gated by LOD (`TerrainLOD`: Macro / Meso / Micro) so that high-frequency detail is only enabled when the octave wavelength would be visible (Nyquist: wavelength ≥ 2-3 output pixels). Coloring layers applied in order:
+Each tile is classified by `classify_tile(terrain, tx, ty, water_level)` into one of three families:
 
-1. Hypsometric base tint from elevation band.
-2. Geology-based rock color ramp — `RockType` drives hue and value (Granite warm grey, Basalt dark, Limestone pale, Sandstone ochre, Shale blue-grey, Metamorphic mid-grey).
-3. Roughness and slope-based material texture — flat surfaces smooth, steep surfaces rough.
-4. Hillshade from a multi-directional light model.
-5. Coastal transition gradients near the water level.
-6. Scree on steep slopes (angle-gated gravel texture).
+| Family | Description |
+|---|---|
+| `PureTerrain` | No boundary — filled with a uniform material texture |
+| `Coast` | A land/water boundary line crosses this tile |
+| `Elevation` | An elevation contour boundary crosses this tile |
 
-Mountain triangle and hill bump glyphs have been removed — procedural texture provides terrain detail at all zoom levels. As a consequence the `dim_glyphs` flag has been removed from `render_terrain()`.
+Transition tiles additionally carry an `EdgePair` (which edges the boundary enters and exits) and a `TransitionGrade`:
+
+| Grade | Coast treatment | Elevation treatment |
+|---|---|---|
+| Shallow | Sandy beach transition | Gentle gradient ramp |
+| Medium | Rocky shore transition | Breakline |
+| Steep | Cliff face | Terrace / escarpment |
+
+The boundary line is a Bezier curve from the entry edge midpoint to the exit edge midpoint, dividing the tile into two distinct regions (`MaskRegion::RegionA` / `RegionB` / `Boundary`).
+
+**Template atlas** (`TemplateAtlas`):
+
+Pre-generated 16×16 sprite templates indexed by (canonical edge pair × grade × shape variant). Only two canonical edge pairs are stored:
+
+- `CanonicalPair::NS` — straight-through boundary (N→S)
+- `CanonicalPair::NE` — corner/arc boundary (N→E)
+
+All 12 other edge combinations are derived via `rotation_lut[entry][exit]` which records the canonical pair, number of 90° clockwise rotation steps (0–3), and a horizontal flip flag. This keeps the atlas compact (2 × 3 grades × 3 shape variants = 18 transition templates).
+
+**Material system**:
+
+`Mat` enum defines 12 material types: Water, Sand, SoilLoam, SoilDry, SoilClay, Gravel, Granite, Basalt, Limestone, Sandstone, Shale, Metamorphic. `classify_tile_mat(tile, water_level)` maps a `TerrainTile` to its material from `RockType`, elevation, and slope. Each pure-terrain material has 3 texture variants for micro-variation. Hypsometric tinting uses 8 discrete warm→cool elevation bands.
+
+**Pixel evaluator**:
+
+`eval_terrain_pixel(terrain, world_x, world_y, pixels_per_tile, seed, water_level)` evaluates one RGBA32 pixel at arbitrary sub-tile world-space coordinates using the autotile system. `render_terrain_region()` fills a caller-owned pixel buffer for a rectangular patch (used by both cache levels). `TerrainLOD` (Macro/Meso/Micro) gates noise detail; edge blending between adjacent tiles ensures seamless boundaries.
+
+Mountain triangle and hill bump glyphs have been removed — autotile texture provides terrain detail at all zoom levels. The `dim_glyphs` flag has been removed from `render_terrain()`.
+
+**Legacy API**: `generate_tile_texture()` and `render_tile_patch()` are retained for compatibility but wrap the new autotile system.
 
 **Dynamic tinting** (composited on top of the clipmap blit):
 
