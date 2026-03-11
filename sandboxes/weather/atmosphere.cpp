@@ -36,18 +36,18 @@ static constexpr float ADVECT_SPEED =
 
 // Moisture
 static constexpr float OCEAN_EVAP_RATE =
-    0.10f;  // ocean moisture source per day (balanced: enough for rain, not enough to accumulate)
+    0.08f;  // ocean moisture source per day (reduced from 0.10 — narrower ocean/land gap)
 static constexpr float LAND_EVAP_RATE =
-    0.04f;  // land moisture source per day (quadratic soil dependence creates desert shutoff)
-static constexpr float CLOUD_PRECIP_RATE = 1.5f;  // cloud → precipitation per day (reduced from 2.5
-                                                  // — lets clouds persist and advect as bands)
+    0.07f;  // land moisture source per day (raised from 0.04 — stronger land recycling)
+static constexpr float CLOUD_PRECIP_RATE = 0.9f;  // cloud → precipitation per day (reduced from 1.5
+                                                   // — lets clouds advect further inland)
 static constexpr float CLOUD_PRECIP_THRESHOLD =
-    0.06f;  // minimum cloud for precipitation (needs thicker cloud for realistic intermittency)
+    0.08f;  // minimum cloud for precipitation (raised from 0.06 — favors organized events)
 static constexpr float CLOUD_EVAP_BASE =
     0.30f;  // base cloud dissipation per day (increased — clouds must clear between storms)
 static constexpr float CLOUD_EVAP_DRY = 0.50f;      // additional dissipation in dry air
 static constexpr float CLOUD_SUBSIDE_RATE = 0.80f;  // cloud clearing from high-pressure subsidence
-static constexpr float UPLIFT_STRENGTH = 4.0f;      // orographic uplift multiplier
+static constexpr float UPLIFT_STRENGTH = 2.0f;      // orographic uplift multiplier (reduced from 4.0)
 
 // Wind-temperature coupling
 static constexpr float K_CONVECTIVE = 0.08f;  // wind convective cooling/heating on ground
@@ -68,8 +68,8 @@ static constexpr float K_ASPECT_SOLAR = 2.0f;  // aspect-based solar heating str
 
 // Phase 1: moisture budget constants
 static constexpr float BUDGET_OCEAN_RECHARGE =
-    0.08f;  // budget recharge over ocean per day (tuned down from 0.20)
-static constexpr float BUDGET_LAND_RECHARGE = 0.01f;  // very slow land recharge
+    0.06f;  // budget recharge over ocean per day (reduced from 0.08)
+static constexpr float BUDGET_LAND_RECHARGE = 0.04f;  // land recharge (raised from 0.01)
 static constexpr float BUDGET_RAIN_COST =
     3.0f;  // budget consumed per unit precipitation (tuned up from 1.5)
 static constexpr float BUDGET_MIXING = 0.005f;  // atmospheric mixing slowly restores budget
@@ -506,8 +506,8 @@ void tick_atmosphere(AtmosphereState& atmo, const Terrain& world, const DynamicS
             // Seasonal q_base tracking: moisture baseline follows temperature-derived
             // Clausius-Clapeyron reference scaled by distance from ocean
             float q_sat_ref = std::clamp(0.05f * std::exp(0.06f * T_ref_base), 0.02f, 1.0f);
-            float maritime_factor = 1.0f / (1.0f + cell.avg_dist_ocean * 0.03f);
-            float q_ref = q_sat_ref * (0.15f + 0.60f * maritime_factor);  // RH ~15-75% baseline
+            float maritime_factor = 1.0f / (1.0f + cell.avg_dist_ocean * 0.015f);
+            float q_ref = q_sat_ref * (0.30f + 0.45f * maritime_factor);  // RH ~30-75% baseline
             cell.q_base += BASELINE_UPDATE_RATE * (q_ref - cell.q_base) * dt_days;
             cell.q_base = std::clamp(cell.q_base, 0.01f, 0.5f);
         }
@@ -1078,8 +1078,8 @@ void tick_atmosphere(AtmosphereState& atmo, const Terrain& world, const DynamicS
             // Coastal cells have higher thermal inertia (smaller T swings)
             float maritime = 1.0f / (1.0f + cell.avg_dist_ocean * 0.02f);
 
-            // Evaporative cooling from soil moisture
-            float evap_cool = cell.avg_soil_wet * K_EVAP_COOL;
+            // Evaporative cooling from soil moisture (stronger over water)
+            float evap_cool = cell.avg_soil_wet * K_EVAP_COOL * (cell.is_water ? 1.8f : 1.0f);
 
             // Wind speed for convective effects
             float wind_speed = std::sqrt(cell.u * cell.u + cell.v * cell.v);
@@ -1095,8 +1095,11 @@ void tick_atmosphere(AtmosphereState& atmo, const Terrain& world, const DynamicS
             float absorb = T_ref_K * T_ref_K * T_ref_K * T_ref_K;
             float radiative_cooling = sigma_norm * (emit - absorb);
 
+            // Ocean thermal inertia: scale down heating/cooling by factor of ~5
+            // (mixed layer heat capacity >> land surface heat capacity)
+            float thermal_inertia = cell.is_water ? 0.2f : 1.0f;
             cell.ground_temp +=
-                dt_days *
+                dt_days * thermal_inertia *
                 (K_SOLAR * solar * cloud_shade * (1.0f - albedo) +
                  K_ASPECT_SOLAR * aspect_solar * solar - radiative_cooling - 0.03f * evap_cool +
                  (K_AIR_GROUND + convective) * (cell.T - cell.ground_temp));
@@ -1104,9 +1107,10 @@ void tick_atmosphere(AtmosphereState& atmo, const Terrain& world, const DynamicS
             // Phase 0C: Maritime moderation — coastal cells relax toward T_ref
             cell.ground_temp += maritime * 0.03f * (T_ref - cell.ground_temp) * dt_days;
 
-            // Water bodies buffer temperature (high thermal inertia)
+            // Water bodies: strong relaxation toward T_ref (high thermal inertia)
             if (cell.is_water) {
-                cell.ground_temp = cell.ground_temp * 0.95f + T_ref * 0.05f;
+                float alpha_ocean = 1.0f - std::exp(-dt_days / 15.0f);  // tau=15 days
+                cell.ground_temp = cell.ground_temp * (1.0f - alpha_ocean) + T_ref * alpha_ocean;
             }
 
             // Ground-air coupling: adds to T_anom for local heating/cooling
@@ -1156,10 +1160,16 @@ void tick_atmosphere(AtmosphereState& atmo, const Terrain& world, const DynamicS
                              cloud_shading * dt_days;
                 cell.q_anom += evap;
             } else {
-                // Land evaporation: quadratic soil moisture dependence creates desert shutoff
-                // Dry soil evaporates very little; wet soil evaporates freely
+                // Land evaporation: soil+water dependence with floor for minimum recycling
+                // Floor of 0.15 ensures even dry regions contribute some moisture
+                // Open water (surface_water > threshold) evaporates at near-ocean rate
+                // Coastal islands get a convergence/roughness bonus (1.15x within 10 tiles of ocean)
                 float wet = std::clamp(cell.avg_soil_wet, 0.0f, 1.0f);
-                float soil_source = wet * wet * LAND_EVAP_RATE;
+                float open_water = std::clamp(cell.avg_soil_wet - 0.5f, 0.0f, 1.0f);
+                float coastal_boost = (cell.avg_dist_ocean < 10.0f)
+                    ? 1.0f + 0.15f * (1.0f - cell.avg_dist_ocean / 10.0f) : 1.0f;
+                float soil_source = ((0.15f + 0.85f * wet * wet) * LAND_EVAP_RATE
+                                    + open_water * 0.5f * LAND_EVAP_RATE) * coastal_boost;
                 float temp_factor = std::clamp(cell.T / 25.0f, 0.1f, 1.2f);
                 float evap_amount =
                     soil_source * temp_factor * wind_evap_factor * humidity_deficit * dt_days;

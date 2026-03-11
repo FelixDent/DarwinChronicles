@@ -248,9 +248,25 @@ static int run_headless(int days, int preset_idx = 0) {
     float last_rc_sample = -1.0f;
     constexpr float RC_SAMPLE_INTERVAL = 0.5f;  // sample every 0.5 sim-days
 
+    // ── GPT behavior tuning telemetry accumulators ─────────────────────────
+    // Atmosphere: land vs ocean moisture/precip tracking (per reporting interval)
+    double gpt_E_ocean_src = 0, gpt_E_land_src = 0, gpt_precip_ocean = 0, gpt_precip_land = 0;
+    double gpt_atmo_q_total = 0, gpt_atmo_cloud_total = 0;
+    float gpt_last_report = 0.0f;
+    constexpr float GPT_REPORT_INTERVAL = 10.0f;  // every 10 sim-days
+
     while (dynamics.elapsed_days < static_cast<float>(days) && !g_quit) {
         tick_atmosphere(atmosphere, terrain, dynamics, DT, &tick_diag);
         tick_dynamics(dynamics, terrain, climate, DT, &atmosphere);
+
+        // Accumulate atmosphere land/ocean moisture fluxes per tick
+        for (const auto& c : atmosphere.cells) {
+            if (c.is_water) {
+                gpt_precip_ocean += c.precip_rate * DT;
+            } else {
+                gpt_precip_land += c.precip_rate * DT;
+            }
+        }
 
         // Reality-check sampling
         if (dynamics.elapsed_days - last_rc_sample >= RC_SAMPLE_INTERVAL) {
@@ -343,6 +359,57 @@ static int run_headless(int days, int preset_idx = 0) {
             std::cout << std::setprecision(3) << " | psi1=" << std::sqrt(psi1_sum2 / nc)
                       << " psi2=" << std::sqrt(psi2_sum2 / nc)
                       << " bc=" << std::sqrt(psi_bc_sum2 / nc) << "\n";
+        }
+
+        // ── GPT telemetry: periodic land/ocean moisture/precip report ────
+        if (dynamics.elapsed_days - gpt_last_report >= GPT_REPORT_INTERVAL) {
+            gpt_last_report = dynamics.elapsed_days;
+
+            // Snapshot: land vs ocean q, precip_budget, surface_water
+            double q_land = 0, q_ocean = 0, budget_land = 0, budget_ocean = 0;
+            uint32_t n_land_atmo = 0, n_ocean_atmo = 0;
+            for (const auto& c : atmosphere.cells) {
+                if (c.is_water) {
+                    q_ocean += c.q;
+                    budget_ocean += c.precip_budget;
+                    n_ocean_atmo++;
+                } else {
+                    q_land += c.q;
+                    budget_land += c.precip_budget;
+                    n_land_atmo++;
+                }
+            }
+
+            double sw_land = 0, sm_land = 0;
+            uint32_t sw_nontrivial = 0, n_land_dyn = 0;
+            for (size_t i = 0; i < dynamics.tiles.size(); ++i) {
+                if (terrain.tiles[i].is_ocean) continue;
+                n_land_dyn++;
+                sw_land += dynamics.tiles[i].surface_water;
+                sm_land += dynamics.tiles[i].soil_moisture;
+                if (dynamics.tiles[i].surface_water > 0.01f) sw_nontrivial++;
+            }
+
+            float fP_land = (gpt_precip_land + gpt_precip_ocean > 0)
+                ? static_cast<float>(gpt_precip_land / (gpt_precip_land + gpt_precip_ocean))
+                : 0.0f;
+
+            printf("GPT_TEL day=%.0f | fP_land=%.3f | q_land=%.4f q_ocean=%.4f | "
+                   "budget_land=%.3f budget_ocean=%.3f | "
+                   "sw_mean=%.5f sm_mean=%.3f sw>0.01=%.1f%% | "
+                   "cumP=%.1f cumET_sw=%.1f cumET_sm=%.1f cumOcDr=%.1f\n",
+                   dynamics.elapsed_days, fP_land,
+                   n_land_atmo > 0 ? q_land / n_land_atmo : 0.0,
+                   n_ocean_atmo > 0 ? q_ocean / n_ocean_atmo : 0.0,
+                   n_land_atmo > 0 ? budget_land / n_land_atmo : 0.0,
+                   n_ocean_atmo > 0 ? budget_ocean / n_ocean_atmo : 0.0,
+                   n_land_dyn > 0 ? sw_land / n_land_dyn : 0.0,
+                   n_land_dyn > 0 ? sm_land / n_land_dyn : 0.0,
+                   n_land_dyn > 0 ? 100.0f * sw_nontrivial / n_land_dyn : 0.0f,
+                   dynamics.budget.total_precip,
+                   dynamics.budget.total_evap_surface,
+                   dynamics.budget.total_evap_soil,
+                   dynamics.budget.total_ocean_drain);
         }
     }
 
@@ -564,6 +631,135 @@ static int run_headless(int days, int preset_idx = 0) {
         }
         std::cout << "\n";
         std::cout << "  (should drop below 0.5 by lag 4-8 for synoptic-scale weather)\n";
+    }
+
+    // ── GPT telemetry: spatial breakdown by dist_ocean bins ─────────────
+    {
+        printf("\n=== GPT SPATIAL BREAKDOWN (by dist_ocean) ===\n");
+        struct Bin {
+            const char* label;
+            float lo, hi;
+            double precip_sum, et_sum, sw_sum, sm_sum, gw_sum;
+            double infil_sum, route_sum;
+            uint32_t count, sw_gt_001, sw_gt_01, sw_gt_03;
+        };
+        Bin bins[] = {
+            {"0-5", 0, 5, 0,0,0,0,0,0,0, 0,0,0,0},
+            {"5-15", 5, 15, 0,0,0,0,0,0,0, 0,0,0,0},
+            {"15-30", 15, 30, 0,0,0,0,0,0,0, 0,0,0,0},
+            {"30-60", 30, 60, 0,0,0,0,0,0,0, 0,0,0,0},
+            {"60+", 60, 9999, 0,0,0,0,0,0,0, 0,0,0,0},
+        };
+        for (size_t i = 0; i < dynamics.tiles.size(); ++i) {
+            if (terrain.tiles[i].is_ocean) continue;
+            const auto& dt = dynamics.tiles[i];
+            const auto& tt = terrain.tiles[i];
+            for (auto& b : bins) {
+                if (tt.dist_ocean >= b.lo && tt.dist_ocean < b.hi) {
+                    b.count++;
+                    b.precip_sum += dt.effective_precip;
+                    b.et_sum += dt.effective_evap;
+                    b.sw_sum += dt.surface_water;
+                    b.sm_sum += dt.soil_moisture;
+                    b.gw_sum += dt.groundwater;
+                    if (dt.surface_water > 0.01f) b.sw_gt_001++;
+                    if (dt.surface_water > 0.1f) b.sw_gt_01++;
+                    if (dt.surface_water > 0.3f) b.sw_gt_03++;
+                    break;
+                }
+            }
+        }
+        printf("  %-8s %6s %8s %8s %8s %8s %8s %8s %8s %8s\n",
+               "dist", "tiles", "precip", "evap", "sw_mean", "sm_mean", "gw_mean",
+               "sw>0.01%", "sw>0.1%", "sw>0.3%");
+        for (const auto& b : bins) {
+            if (b.count == 0) continue;
+            float n = static_cast<float>(b.count);
+            printf("  %-8s %6u %8.4f %8.4f %8.5f %8.4f %8.4f %7.1f%% %7.1f%% %7.1f%%\n",
+                   b.label, b.count,
+                   static_cast<float>(b.precip_sum / n),
+                   static_cast<float>(b.et_sum / n),
+                   static_cast<float>(b.sw_sum / n),
+                   static_cast<float>(b.sm_sum / n),
+                   static_cast<float>(b.gw_sum / n),
+                   100.0f * b.sw_gt_001 / n,
+                   100.0f * b.sw_gt_01 / n,
+                   100.0f * b.sw_gt_03 / n);
+        }
+
+        // Atmosphere: land vs ocean precip + q by dist_ocean
+        printf("\n=== GPT ATMOSPHERE BREAKDOWN (by dist_ocean) ===\n");
+        struct AtmoBin {
+            const char* label;
+            float lo, hi;
+            double q_sum, budget_sum, precip_sum, cloud_sum;
+            uint32_t count, budget_starved;
+        };
+        AtmoBin abins[] = {
+            {"ocean", -1, 0.01f, 0,0,0,0, 0,0},
+            {"coast(0-5)", 0.01f, 5, 0,0,0,0, 0,0},
+            {"near(5-15)", 5, 15, 0,0,0,0, 0,0},
+            {"mid(15-30)", 15, 30, 0,0,0,0, 0,0},
+            {"far(30-60)", 30, 60, 0,0,0,0, 0,0},
+            {"deep(60+)", 60, 9999, 0,0,0,0, 0,0},
+        };
+        for (const auto& c : atmosphere.cells) {
+            float d = c.is_water ? -0.5f : c.avg_dist_ocean;
+            for (auto& ab : abins) {
+                if (d >= ab.lo && d < ab.hi) {
+                    ab.count++;
+                    ab.q_sum += c.q;
+                    ab.budget_sum += c.precip_budget;
+                    ab.precip_sum += c.precip_rate;
+                    ab.cloud_sum += c.cloud;
+                    if (c.precip_budget < 0.1f) ab.budget_starved++;
+                    break;
+                }
+            }
+        }
+        printf("  %-14s %5s %8s %8s %8s %8s %10s\n",
+               "dist", "cells", "q_mean", "budget", "precip", "cloud", "budg<0.1%");
+        for (const auto& ab : abins) {
+            if (ab.count == 0) continue;
+            float n = static_cast<float>(ab.count);
+            printf("  %-14s %5u %8.4f %8.3f %8.4f %8.4f %9.1f%%\n",
+                   ab.label, ab.count,
+                   static_cast<float>(ab.q_sum / n),
+                   static_cast<float>(ab.budget_sum / n),
+                   static_cast<float>(ab.precip_sum / n),
+                   static_cast<float>(ab.cloud_sum / n),
+                   100.0f * ab.budget_starved / n);
+        }
+
+        // Land precip fraction summary
+        double total_precip_all = gpt_precip_land + gpt_precip_ocean;
+        printf("\n=== GPT LAND PRECIP FRACTION ===\n");
+        printf("  Cumulative: land=%.1f ocean=%.1f fP_land=%.3f\n",
+               gpt_precip_land, gpt_precip_ocean,
+               total_precip_all > 0 ? gpt_precip_land / total_precip_all : 0.0);
+
+        // Temperature land vs ocean
+        printf("\n=== GPT TEMPERATURE: LAND vs OCEAN ===\n");
+        float T_land_min = 1e9f, T_land_max = -1e9f, T_ocean_min = 1e9f, T_ocean_max = -1e9f;
+        double T_land_sum = 0, T_ocean_sum = 0;
+        uint32_t n_land_T = 0, n_ocean_T = 0;
+        for (const auto& c : atmosphere.cells) {
+            if (c.is_water) {
+                T_ocean_min = std::min(T_ocean_min, c.T);
+                T_ocean_max = std::max(T_ocean_max, c.T);
+                T_ocean_sum += c.T;
+                n_ocean_T++;
+            } else {
+                T_land_min = std::min(T_land_min, c.T);
+                T_land_max = std::max(T_land_max, c.T);
+                T_land_sum += c.T;
+                n_land_T++;
+            }
+        }
+        printf("  Land:  min=%.1f mean=%.1f max=%.1f (n=%u)\n",
+               T_land_min, n_land_T > 0 ? T_land_sum / n_land_T : 0.0, T_land_max, n_land_T);
+        printf("  Ocean: min=%.1f mean=%.1f max=%.1f (n=%u)\n",
+               T_ocean_min, n_ocean_T > 0 ? T_ocean_sum / n_ocean_T : 0.0, T_ocean_max, n_ocean_T);
     }
 
     // Comprehensive hydrology diagnostics

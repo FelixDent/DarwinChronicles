@@ -391,9 +391,10 @@ void tick_dynamics(DynamicState& state, const Terrain& world, const ClimateData&
         // ── 3. Infiltration: surface → soil ──────────────────────────────
         // ksat (m/s) → normalize to fraction/day by dividing by soil_depth
         // so the rate is "fraction of standing water absorbed per day"
-        float infil_rate = (tt.soil_depth > 0.01f) ? tt.ksat * 86400.0f / tt.soil_depth : 0.0f;
+        float infil_rate =
+            (tt.soil_depth > 0.01f) ? tt.ksat * 86400.0f / tt.soil_depth * 0.25f : 0.0f;
         float slope_factor = std::max(
-            0.0f, 1.0f - std::pow(tt.slope01, 0.7f));  // superlinear: steep slopes infiltrate less
+            0.35f, 1.0f - std::pow(tt.slope01, 0.7f));  // superlinear: steep slopes infiltrate less
         float infiltration = infil_rate * slope_factor * dt_days;
         float remaining_capacity = tt.field_capacity - dt.soil_moisture;
         float actual_infil =
@@ -491,9 +492,9 @@ void tick_dynamics(DynamicState& state, const Terrain& world, const ClimateData&
             }
         }
 
-        // Drain to ocean (coastal sink)
+        // Drain to ocean (coastal sink) — balanced for wetlands without ponding
         if (ocean_drain > 0.0f) {
-            float K_OUT = 0.5f;
+            float K_OUT = 0.30f;
             float effective_k = std::min(K_OUT * dt_days, 0.5f);
             float drain = std::min(dt.surface_water * 0.8f, effective_k * ocean_drain);
             dt.surface_water -= drain;
@@ -504,7 +505,8 @@ void tick_dynamics(DynamicState& state, const Terrain& world, const ClimateData&
         }
 
         if (ntargets > 0 && sum_dh > 0.0f) {
-            float K_OUT = 0.5f;
+            // Steeper terrain routes faster (mountains drain, lowlands hold)
+            float K_OUT = 0.15f + std::clamp((tt.slope01 - 0.08f) * 2.0f, 0.0f, 0.25f);
             float effective_k = std::min(K_OUT * dt_days, 0.5f);  // CFL-like cap
             float max_out = dt.surface_water * 0.8f;
             float out = std::min(max_out, effective_k * sum_dh);
@@ -522,11 +524,18 @@ void tick_dynamics(DynamicState& state, const Terrain& world, const ClimateData&
         dt.local_humidity =
             std::clamp(dt.local_humidity * 0.95f + total_evap * HUMIDITY_FEEDBACK, 0.0f, 1.0f);
 
-        // Water conservation: excess surface water infiltrates soil; remainder is flash runoff
-        // Smooth lake depth cap: linearly interpolates from 2.0 (flat) to 1.0 (slope>=0.1)
-        float max_sw = 1.0f + std::max(0.0f, 1.0f - tt.slope01 / 0.10f);
+        // Water conservation: excess surface water infiltrates soil/groundwater; remainder is runoff
+        // Smooth cap: 3.0 flat → 1.5 at slope 0.1 → 1.0 at slope 0.2
+        float max_sw = 1.5f + std::max(0.0f, 1.5f - tt.slope01 / 0.10f * 1.5f);
+        if (tt.slope01 > 0.12f) max_sw *= std::max(0.65f, 1.0f - (tt.slope01 - 0.12f) * 3.0f);
         if (dt.surface_water > max_sw) {
             float overflow = dt.surface_water - max_sw;
+            // Route half of overflow to groundwater (subsurface absorption)
+            float gw_cap2 = tt.soil_depth * tt.porosity;
+            float gw_absorb = std::min(overflow * 0.5f, std::max(0.0f, gw_cap2 - dt.groundwater));
+            dt.groundwater += gw_absorb;
+            state.budget.total_gw_recharge += gw_absorb;
+            overflow -= gw_absorb;
             float absorbed = std::max(0.0f, std::min(overflow, 1.0f - dt.soil_moisture));
             dt.soil_moisture += absorbed;
             float flash_runoff = overflow - absorbed;
@@ -588,7 +597,7 @@ void tick_dynamics(DynamicState& state, const Terrain& world, const ClimateData&
             state.tiles[i].surface_water += runoff_in[i];
             // Smooth lake depth cap (skip basin tiles — they use spillway logic)
             if (state.basin_id[i] == DynamicState::NO_BASIN) {
-                float max_depth = 1.0f + std::max(0.0f, 1.0f - world.tiles[i].slope01 / 0.10f);
+                float max_depth = 1.5f + std::max(0.0f, 1.5f - world.tiles[i].slope01 / 0.10f * 1.5f);
                 if (state.tiles[i].surface_water > max_depth) {
                     float overflow = state.tiles[i].surface_water - max_depth;
                     float absorbed =
@@ -667,7 +676,7 @@ void tick_dynamics(DynamicState& state, const Terrain& world, const ClimateData&
                 if (!world.tiles[st].is_ocean) {
                     state.tiles[st].surface_water += td;
                     // Apply capacity check on spill tile to prevent unrealistic spikes
-                    float max_sw = 1.0f + std::max(0.0f, 1.0f - world.tiles[st].slope01 / 0.10f);
+                    float max_sw = 1.5f + std::max(0.0f, 1.5f - world.tiles[st].slope01 / 0.10f * 1.5f);
                     if (state.tiles[st].surface_water > max_sw) {
                         float spill_overflow = state.tiles[st].surface_water - max_sw;
                         state.tiles[st].surface_water = max_sw;
