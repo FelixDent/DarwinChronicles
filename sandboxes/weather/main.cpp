@@ -1227,7 +1227,9 @@ int main(int argc, char* argv[]) {
                         int mx = event.button.x;
                         int my = event.button.y;
 
-                        if (prev_btn.contains(mx, my)) {
+                        if (!show_hud) {
+                            // Buttons hidden — ignore clicks
+                        } else if (prev_btn.contains(mx, my)) {
                             current_preset = (current_preset - 1 + NUM_PRESETS) % NUM_PRESETS;
                             generate_current();
                         } else if (next_btn.contains(mx, my)) {

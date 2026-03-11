@@ -986,7 +986,7 @@ int main(int argc, char* argv[]) {
                     if (event.button.button == SDL_BUTTON_LEFT) {
                         int mx = event.button.x;
                         int my = event.button.y;
-                        if (regen_btn.contains(mx, my)) {
+                        if (show_hud && regen_btn.contains(mx, my)) {
                             cfg.seed = static_cast<uint32_t>(rng());
                             std::cout << "[REGEN] Random seed: " << cfg.seed << "\n";
                             needs_regen = true;
