@@ -249,9 +249,8 @@ static int run_headless(int days, int preset_idx = 0) {
     constexpr float RC_SAMPLE_INTERVAL = 0.5f;  // sample every 0.5 sim-days
 
     // ── GPT behavior tuning telemetry accumulators ─────────────────────────
-    // Atmosphere: land vs ocean moisture/precip tracking (per reporting interval)
-    double gpt_E_ocean_src = 0, gpt_E_land_src = 0, gpt_precip_ocean = 0, gpt_precip_land = 0;
-    double gpt_atmo_q_total = 0, gpt_atmo_cloud_total = 0;
+    // Atmosphere: land vs ocean precipitation tracking (cumulative)
+    double gpt_precip_ocean = 0, gpt_precip_land = 0;
     float gpt_last_report = 0.0f;
     constexpr float GPT_REPORT_INTERVAL = 10.0f;  // every 10 sim-days
 
@@ -756,10 +755,12 @@ static int run_headless(int days, int preset_idx = 0) {
                 n_land_T++;
             }
         }
-        printf("  Land:  min=%.1f mean=%.1f max=%.1f (n=%u)\n",
-               T_land_min, n_land_T > 0 ? T_land_sum / n_land_T : 0.0, T_land_max, n_land_T);
-        printf("  Ocean: min=%.1f mean=%.1f max=%.1f (n=%u)\n",
-               T_ocean_min, n_ocean_T > 0 ? T_ocean_sum / n_ocean_T : 0.0, T_ocean_max, n_ocean_T);
+        if (n_land_T > 0)
+            printf("  Land:  min=%.1f mean=%.1f max=%.1f (n=%u)\n",
+                   T_land_min, T_land_sum / n_land_T, T_land_max, n_land_T);
+        if (n_ocean_T > 0)
+            printf("  Ocean: min=%.1f mean=%.1f max=%.1f (n=%u)\n",
+                   T_ocean_min, T_ocean_sum / n_ocean_T, T_ocean_max, n_ocean_T);
     }
 
     // Comprehensive hydrology diagnostics

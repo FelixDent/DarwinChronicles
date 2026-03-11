@@ -1162,14 +1162,14 @@ void tick_atmosphere(AtmosphereState& atmo, const Terrain& world, const DynamicS
             } else {
                 // Land evaporation: soil+water dependence with floor for minimum recycling
                 // Floor of 0.15 ensures even dry regions contribute some moisture
-                // Open water (surface_water > threshold) evaporates at near-ocean rate
-                // Coastal islands get a convergence/roughness bonus (1.15x within 10 tiles of ocean)
+                // Saturated land (soil+sw > 0.5) gets bonus evap (wetlands, flooded areas)
+                // Coastal islands get a convergence/roughness bonus (1.15x within 10 tiles)
                 float wet = std::clamp(cell.avg_soil_wet, 0.0f, 1.0f);
-                float open_water = std::clamp(cell.avg_soil_wet - 0.5f, 0.0f, 1.0f);
+                float saturated_bonus = std::clamp(cell.avg_soil_wet - 0.5f, 0.0f, 1.0f);
                 float coastal_boost = (cell.avg_dist_ocean < 10.0f)
                     ? 1.0f + 0.15f * (1.0f - cell.avg_dist_ocean / 10.0f) : 1.0f;
                 float soil_source = ((0.15f + 0.85f * wet * wet) * LAND_EVAP_RATE
-                                    + open_water * 0.5f * LAND_EVAP_RATE) * coastal_boost;
+                                    + saturated_bonus * 0.5f * LAND_EVAP_RATE) * coastal_boost;
                 float temp_factor = std::clamp(cell.T / 25.0f, 0.1f, 1.2f);
                 float evap_amount =
                     soil_source * temp_factor * wind_evap_factor * humidity_deficit * dt_days;
