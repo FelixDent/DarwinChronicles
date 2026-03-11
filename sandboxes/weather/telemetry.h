@@ -55,8 +55,14 @@ struct Camera;
 struct DynamicStats;
 enum class OverlayMode;
 
-void render_weather_legend(SDL_Renderer* renderer, const WeatherStats& stats, OverlayMode overlay,
-                           int win_w, int win_h, int mouse_x = -1, int mouse_y = -1);
+// Returns the stats panel width (so overlay legend can position right of it).
+int render_weather_stats(SDL_Renderer* renderer, const WeatherStats& stats,
+                         int win_w, int win_h, int mouse_x = -1, int mouse_y = -1);
+
+// offset_x: left margin for the legend panel (use 0 for bottom-left, or pass
+// stats_panel_w + padding to position right of the stats panel).
+void render_overlay_legend(SDL_Renderer* renderer, OverlayMode overlay, int win_w, int win_h,
+                           int offset_x = 0, bool show_info = true);
 
 void render_dynamic_legend(SDL_Renderer* renderer, const DynamicStats& stats,
                            const AtmosphereStats& atmo_stats, float elapsed_days, float time_scale,

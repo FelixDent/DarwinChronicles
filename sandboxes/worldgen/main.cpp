@@ -947,6 +947,7 @@ int main(int argc, char* argv[]) {
     OverlayMode overlay = OverlayMode::None;
     bool show_grid = false;
     bool show_fps = false;
+    bool show_hud = true;
     auto active_tweak = TweakParam::Seed;
     bool needs_regen = false;
     FPSCounter fps_counter;
@@ -1064,6 +1065,11 @@ int main(int argc, char* argv[]) {
                         // Grid
                         case SDLK_g:
                             show_grid = !show_grid;
+                            break;
+
+                        // HUD toggle
+                        case SDLK_h:
+                            show_hud = !show_hud;
                             break;
 
                         // FPS
@@ -1226,18 +1232,19 @@ int main(int argc, char* argv[]) {
             render_grid(sdl_renderer, terrain, cam, win_w, win_h, Renderer::TILE_SIZE);
         }
 
-        render_legend(sdl_renderer, stats, win_w, win_h);
-        render_overlay_legend(sdl_renderer, stats, overlay, win_w, win_h);
+        if (show_hud) {
+            render_legend(sdl_renderer, stats, win_w, win_h);
+            render_overlay_legend(sdl_renderer, stats, overlay, win_w, win_h);
 
-        // Regenerate button (top-right)
-        {
-            int mx, my;
-            SDL_GetMouseState(&mx, &my);
-            bool hovered = regen_btn.w > 0 && regen_btn.contains(mx, my);
-            constexpr int BTN_MARGIN = 10;
-            // Position from right edge; first frame uses x=0, corrects on next
-            int btn_x = win_w - (regen_btn.w > 0 ? regen_btn.w : 150) - BTN_MARGIN;
-            regen_btn = render_button(sdl_renderer, btn_x, BTN_MARGIN, "REGENERATE", hovered);
+            // Regenerate button (top-right)
+            {
+                int mx, my;
+                SDL_GetMouseState(&mx, &my);
+                bool hovered = regen_btn.w > 0 && regen_btn.contains(mx, my);
+                constexpr int BTN_MARGIN = 10;
+                int btn_x = win_w - (regen_btn.w > 0 ? regen_btn.w : 150) - BTN_MARGIN;
+                regen_btn = render_button(sdl_renderer, btn_x, BTN_MARGIN, "REGENERATE", hovered);
+            }
         }
 
         SDL_RenderPresent(sdl_renderer);

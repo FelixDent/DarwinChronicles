@@ -651,14 +651,9 @@ static int panel_width_for(std::initializer_list<const char*> lines, int scale, 
     return max_w + pad * 2;
 }
 
-void render_weather_legend(SDL_Renderer* renderer, const WeatherStats& stats, OverlayMode overlay,
-                           int win_w, int win_h, int mouse_x, int mouse_y) {
+int render_weather_stats(SDL_Renderer* renderer, const WeatherStats& stats,
+                         int win_w, int win_h, int mouse_x, int mouse_y) {
     constexpr int SCALE = 2;
-    constexpr int ROW_H = 18;
-    constexpr int PAD = 8;
-    constexpr int BAR_H = 14;
-
-    char buf[80];
 
     // ── Stats panel (bottom-left, always shown when weather is baked) ────────
     int stats_panel_w;
@@ -726,13 +721,22 @@ void render_weather_legend(SDL_Renderer* renderer, const WeatherStats& stats, Ov
         }
     }
 
-    // ── Overlay color key (right of stats, shown when overlay is active) ────
+    return stats_panel_w;
+}
+
+void render_overlay_legend(SDL_Renderer* renderer, OverlayMode overlay,
+                           int win_w, int win_h, int offset_x, bool show_info) {
+    constexpr int SCALE = 2;
+    constexpr int ROW_H = 18;
+    constexpr int PAD = 8;
+    constexpr int BAR_H = 14;
+
+    // ── Overlay color key (shown when overlay is active) ─────────────────────
     if (overlay == OverlayMode::None) {
-        // No overlay active — top button already shows "OVERLAY: NONE"
         return;
     }
 
-    int key_x = PAD + stats_panel_w + PAD;
+    int key_x = PAD + offset_x;
     SDL_Rect legend_rect = {0, 0, 0, 0};  // Track legend bounds for info panel
 
     // Helper: draw a gradient key panel (title, gradient bar, min/max labels)
@@ -854,8 +858,8 @@ void render_weather_legend(SDL_Renderer* renderer, const WeatherStats& stats, Ov
 
         case OverlayMode::RainShadow: {
             const char* l1 = "RAIN SHADOW";
-            std::snprintf(buf, sizeof(buf), "%u leeward tiles", stats.rain_shadow_tiles);
-            int key_w = panel_width_for({l1, buf, "Leeward of mountains"}, SCALE, PAD * 2);
+            const char* l3 = "Orange = shadow intensity";
+            int key_w = panel_width_for({l1, l3, "Leeward of mountains"}, SCALE, PAD * 2);
             int key_rows = 4;
             int key_h = PAD * 2 + ROW_H * key_rows;
             int key_y = win_h - key_h - PAD;
@@ -881,7 +885,7 @@ void render_weather_legend(SDL_Renderer* renderer, const WeatherStats& stats, Ov
 
             draw_text(renderer, key_x + PAD, y + 2, "Leeward of mountains", SCALE, 160, 160, 160);
             y += ROW_H;
-            draw_text(renderer, key_x + PAD, y + 2, buf, SCALE, 160, 160, 160);
+            draw_text(renderer, key_x + PAD, y + 2, l3, SCALE, 160, 160, 160);
             break;
         }
 
@@ -1044,6 +1048,9 @@ void render_weather_legend(SDL_Renderer* renderer, const WeatherStats& stats, Ov
     }
 
     // ── Overlay info panel (right of legend, bottom-aligned) ─────────────────
+    if (!show_info)
+        return;
+
     auto info = get_overlay_info(overlay);
     if (legend_rect.w > 0 && info.count > 0) {
         const auto& theme = ui::Theme::instance();

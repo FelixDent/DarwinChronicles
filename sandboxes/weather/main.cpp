@@ -28,7 +28,7 @@ static void render_controls_hint(SDL_Renderer* r, int win_w, int win_h) {
     const char* hlines[] = {
         "T:PLAY/PAUSE  R:RESET  SPACE:REBAKE",
         ",:SLOWER  .:FASTER  V:WIND  G:GRID",
-        "N/P:PRESET  OVERLAYS: USE CYCLE BTN",
+        "N/P:PRESET  H:HIDE HUD  OVERLAYS:BTN",
     };
     int hint_w = ui::auto_width({hlines[0], hlines[1], hlines[2]}, HINT_SCALE, ui::S2);
     int hint_h = ui::S2 * 2 + ui::row_height(HINT_SCALE) * 3;
@@ -881,7 +881,11 @@ int main(int argc, char* argv[]) {
             }
 
             // Legends
-            render_weather_legend(sw_renderer, weather_stats, cap.mode, WIN_W, WIN_H);
+            {
+                constexpr int PAD = 8;
+                int stats_w = render_weather_stats(sw_renderer, weather_stats, WIN_W, WIN_H);
+                render_overlay_legend(sw_renderer, cap.mode, WIN_W, WIN_H, stats_w + PAD, true);
+            }
             render_dynamic_legend(sw_renderer, dyn_stats, atmo_stats, dynamics.elapsed_days,
                                   dynamics.time_scale, dynamics.paused, cap.mode, WIN_W, WIN_H,
                                   atmosphere.time_of_day, atmosphere.day_of_year);
@@ -1148,6 +1152,7 @@ int main(int argc, char* argv[]) {
     bool show_wind = true;  // Wind arrows overlaid on all climate views
     bool show_grid = false;
     bool show_fps = false;
+    bool show_hud = true;   // H key: toggle all info panels
     FPSCounter fps_counter;
 
     // Generate terrain + auto-bake weather
@@ -1386,6 +1391,11 @@ int main(int argc, char* argv[]) {
                             show_wind = !show_wind;
                             break;
 
+                        // HUD toggle
+                        case SDLK_h:
+                            show_hud = !show_hud;
+                            break;
+
                         // FPS
                         case SDLK_f:
                             show_fps = !show_fps;
@@ -1619,43 +1629,54 @@ int main(int argc, char* argv[]) {
         int mx, my;
         SDL_GetMouseState(&mx, &my);
 
-        if (weather_baked) {
-            render_weather_legend(sdl_renderer, weather_stats, overlay, win_w, win_h, mx, my);
-            render_dynamic_legend(sdl_renderer, dyn_stats, atmo_stats, dynamics.elapsed_days,
-                                  dynamics.time_scale, dynamics.paused, overlay, win_w, win_h,
-                                  atmosphere.time_of_day, atmosphere.day_of_year, mx, my);
+        if (show_hud) {
+            if (weather_baked) {
+                constexpr int PAD = 8;
+                int stats_w = render_weather_stats(sdl_renderer, weather_stats, win_w, win_h, mx, my);
+                render_overlay_legend(sdl_renderer, overlay, win_w, win_h,
+                                      stats_w + PAD, /*show_info=*/true);
+                render_dynamic_legend(sdl_renderer, dyn_stats, atmo_stats, dynamics.elapsed_days,
+                                      dynamics.time_scale, dynamics.paused, overlay, win_w, win_h,
+                                      atmosphere.time_of_day, atmosphere.day_of_year, mx, my);
+            }
+
+            // Buttons (top area)
+            {
+                constexpr int BTN_MARGIN = 10;
+                constexpr int BTN_GAP = 8;
+
+                int bx = BTN_MARGIN;
+
+                bool prev_hov = prev_btn.w > 0 && prev_btn.contains(mx, my);
+                prev_btn = render_button(sdl_renderer, bx, BTN_MARGIN, "< PREV", prev_hov);
+                bx += prev_btn.w + BTN_GAP;
+
+                bool next_hov = next_btn.w > 0 && next_btn.contains(mx, my);
+                next_btn = render_button(sdl_renderer, bx, BTN_MARGIN, "NEXT >", next_hov);
+                bx += next_btn.w + BTN_GAP + 20;
+
+                const char* bake_label = weather_baked ? "REBAKE" : "BAKE WEATHER";
+                bool bake_hov = bake_btn.w > 0 && bake_btn.contains(mx, my);
+                bake_btn = render_button(sdl_renderer, bx, BTN_MARGIN, bake_label, bake_hov);
+                bx += bake_btn.w + BTN_GAP + 20;
+
+                // Overlay cycle button
+                char ov_label[64];
+                std::snprintf(ov_label, sizeof(ov_label), "OVERLAY: %s", overlay_name(overlay));
+                bool ov_hov = overlay_btn.w > 0 && overlay_btn.contains(mx, my);
+                overlay_btn = render_status_chip(sdl_renderer, bx, BTN_MARGIN, ov_label, ov_hov);
+            }
+
+            render_controls_hint(sdl_renderer, win_w, win_h);
+        } else {
+            // HUD hidden — show only the overlay legend at bottom-left, no info panel
+            if (weather_baked) {
+                render_overlay_legend(sdl_renderer, overlay, win_w, win_h,
+                                      0, /*show_info=*/false);
+            }
         }
 
-        // Buttons (top area)
-        {
-            constexpr int BTN_MARGIN = 10;
-            constexpr int BTN_GAP = 8;
-
-            int bx = BTN_MARGIN;
-
-            bool prev_hov = prev_btn.w > 0 && prev_btn.contains(mx, my);
-            prev_btn = render_button(sdl_renderer, bx, BTN_MARGIN, "< PREV", prev_hov);
-            bx += prev_btn.w + BTN_GAP;
-
-            bool next_hov = next_btn.w > 0 && next_btn.contains(mx, my);
-            next_btn = render_button(sdl_renderer, bx, BTN_MARGIN, "NEXT >", next_hov);
-            bx += next_btn.w + BTN_GAP + 20;
-
-            const char* bake_label = weather_baked ? "REBAKE" : "BAKE WEATHER";
-            bool bake_hov = bake_btn.w > 0 && bake_btn.contains(mx, my);
-            bake_btn = render_button(sdl_renderer, bx, BTN_MARGIN, bake_label, bake_hov);
-            bx += bake_btn.w + BTN_GAP + 20;
-
-            // Overlay cycle button
-            char ov_label[64];
-            std::snprintf(ov_label, sizeof(ov_label), "OVERLAY: %s", overlay_name(overlay));
-            bool ov_hov = overlay_btn.w > 0 && overlay_btn.contains(mx, my);
-            overlay_btn = render_status_chip(sdl_renderer, bx, BTN_MARGIN, ov_label, ov_hov);
-        }
-
-        render_controls_hint(sdl_renderer, win_w, win_h);
-
-        // Tile inspector — show when hovering over the world map
+        // Tile inspector — always visible regardless of HUD toggle
         if (weather_baked && mx >= 0 && my >= 0) {
             int tile_x, tile_y;
             cam.screen_to_tile(mx, my, win_w, win_h, Renderer::TILE_SIZE, tile_x, tile_y);

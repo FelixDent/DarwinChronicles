@@ -243,10 +243,10 @@ void Renderer::bake_terrain_cache(const Terrain& world, uint32_t seed, float wat
     cached_water_level_ = water_level;
 
     // Macro + meso baked synchronously (fast). Detail bakes in background.
-    int macro_h = static_cast<int>(world.height) * 4;
-    int meso_h = static_cast<int>(world.height) * 8;
-    int total_rows = macro_h + meso_h;
-    int rows_done = 0;
+    // Progress tracks tile rows (what the callback reports), not pixel rows.
+    int world_h = static_cast<int>(world.height);
+    int total_tile_rows = world_h * 2;  // macro + meso each iterate world_h tile rows
+    int tile_rows_done = 0;
 
     auto bake_level = [&](TerrainCacheLevel& cache, int ppt, const char* stage) {
         int tex_w = static_cast<int>(world.width) * ppt;
@@ -255,15 +255,15 @@ void Renderer::bake_terrain_cache(const Terrain& world, uint32_t seed, float wat
 
         std::vector<uint32_t> pixels(static_cast<size_t>(tex_w) * static_cast<size_t>(tex_h));
 
-        int base_rows = rows_done;
+        int base_rows = tile_rows_done;
         auto progress = [&](int row, int /*row_total*/) {
-            float pct = static_cast<float>(base_rows + row) / static_cast<float>(total_rows);
+            float pct = static_cast<float>(base_rows + row) / static_cast<float>(total_tile_rows);
             render_loading_screen(pct, stage);
         };
 
         render_terrain_region(world, 0.0f, 0.0f, wpp, tex_w, tex_h, seed, pixels.data(), tex_w,
                               water_level, progress);
-        rows_done += tex_h;
+        tile_rows_done += world_h;
 
         if (cache.texture)
             SDL_DestroyTexture(cache.texture);
