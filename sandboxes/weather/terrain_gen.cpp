@@ -1185,67 +1185,336 @@ static void generate_tectonic_terrain(std::vector<float>& height_field,
         }
     }
 
-    // ── 4b. Tectonic depressions (grabens) ──────────────────────────────
-    // Create inland depressions that become natural lake basins.
-    // Placed far from coasts using low-frequency noise to select locations.
+    // ── 4b. Geological depressions ──────────────────────────────────────
+    // Three physically-justified processes create natural lake basins with
+    // distinct morphologies. Applied before stream-power erosion so drainage
+    // networks develop realistic outlets from these basins.
+    //
+    // Process 1: Tectonic grabens — elongated rift basins at divergent boundaries
+    // Process 2: Glacial scouring — valley-following troughs + kettle fields
+    // Process 3: Volcanic calderas — circular rimmed basins near convergent margins
+
+    // ── Shared hash for deterministic placement ──
+    auto place_hash = [](int x, int y, int s) -> float {
+        uint32_t hv = static_cast<uint32_t>(x * 374761393 + y * 668265263 + s);
+        hv = (hv ^ (hv >> 13)) * 1103515245;
+        hv = hv ^ (hv >> 16);
+        return static_cast<float>(hv & 0xFFFF) / 65535.0f;
+    };
+
+    // ── Process 1: Tectonic grabens ──────────────────────────────────────
+    // Rift basins form at divergent plate boundaries where crust pulls apart.
+    // We already have rift shoulders in the boundary stress code — this adds
+    // segmented floor subsidence within the rift corridor, creating en echelon
+    // basins like the East African Rift lakes (Tanganyika, Malawi, Turkana).
     {
-        FastNoiseLite graben_noise;
-        graben_noise.SetSeed(static_cast<int>(seed + 500));
-        graben_noise.SetNoiseType(FastNoiseLite::NoiseType_OpenSimplex2);
-        graben_noise.SetFrequency(0.006f);  // lower freq = larger depressions
+        // Noise for segmenting rifts into discrete basins
+        FastNoiseLite rift_segment;
+        rift_segment.SetSeed(static_cast<int>(seed + 500));
+        rift_segment.SetNoiseType(FastNoiseLite::NoiseType_OpenSimplex2);
+        rift_segment.SetFrequency(0.04f);  // ~25-tile segments
 
-        // Elongated shape noise — different x/y frequencies create rift-like shapes
-        FastNoiseLite graben_shape;
-        graben_shape.SetSeed(static_cast<int>(seed + 501));
-        graben_shape.SetNoiseType(FastNoiseLite::NoiseType_OpenSimplex2);
-        graben_shape.SetFrequency(0.018f);
-
-        // Third noise for irregular edges
-        FastNoiseLite graben_edge;
-        graben_edge.SetSeed(static_cast<int>(seed + 502));
-        graben_edge.SetNoiseType(FastNoiseLite::NoiseType_OpenSimplex2);
-        graben_edge.SetFrequency(0.04f);
+        FastNoiseLite rift_edge;
+        rift_edge.SetSeed(static_cast<int>(seed + 501));
+        rift_edge.SetNoiseType(FastNoiseLite::NoiseType_OpenSimplex2);
+        rift_edge.SetFrequency(0.08f);  // irregular basin edges
 
         for (uint32_t y = 3; y < h - 3; ++y) {
             for (uint32_t x = 3; x < w - 3; ++x) {
                 size_t idx = static_cast<size_t>(y) * w + x;
-                float ht = eroded[idx];
-                if (ht < env.water_level + 0.10f)
-                    continue;  // skip near-coast
+                if (eroded[idx] < env.water_level + 0.05f) continue;
+
+                float conv = convergence_field[idx];
+                float bd = boundary_dist[idx];
+
+                // Only at divergent boundaries (conv < -0.1), within rift corridor
+                if (conv > -0.1f || bd > 12.0f) continue;
 
                 float fx = static_cast<float>(x);
                 float fy = static_cast<float>(y);
 
-                // Must be well inland: check 7x7 neighborhood for any water
-                float min_nbr = 1.0f;
-                bool near_water = false;
-                for (int dy = -3; dy <= 3 && !near_water; ++dy) {
-                    for (int dx = -3; dx <= 3 && !near_water; ++dx) {
-                        auto ny2 = static_cast<uint32_t>(static_cast<int>(y) + dy);
-                        auto nx2 = static_cast<uint32_t>(static_cast<int>(x) + dx);
-                        if (ny2 < h && nx2 < w) {
-                            if (eroded[static_cast<size_t>(ny2) * w + nx2] < env.water_level)
-                                near_water = true;
+                // Rift floor subsidence: Gaussian across corridor, segmented along axis
+                float cross_rift = std::exp(-(bd * bd) / (6.0f * 6.0f));
+                float divergence = std::min(-conv, 1.0f);
+
+                // Segment into discrete basins (noise along boundary tangent)
+                float along_axis = fx * boundary_tx[idx] + fy * boundary_ty[idx];
+                float seg = rift_segment.GetNoise(along_axis * 0.06f, bd * 0.1f);
+                float basin_mask = std::clamp((seg + 0.2f) * 2.0f, 0.0f, 1.0f);
+
+                // Irregular edges
+                float edge = rift_edge.GetNoise(fx, fy);
+                float edge_mod = 0.5f + 0.5f * edge;
+
+                // Subsidence depth: up to 0.08 elev01 (~580m)
+                // Clamp to stay above water_level - 0.01 (allows slight sub-sea-level
+                // depressions like the Dead Sea, without creating ocean artifacts)
+                float subsidence = 0.08f * divergence * cross_rift * basin_mask * edge_mod;
+                eroded[idx] = std::max(eroded[idx] - subsidence, env.water_level - 0.01f);
+            }
+        }
+    }
+
+    // ── Process 2: Glacial scouring ──────────────────────────────────────
+    // At high latitudes and elevations, glaciers carve U-shaped troughs and
+    // leave over-deepened basins. After retreat, these fill with water
+    // (Great Lakes, Scandinavian fjord lakes, Patagonian lakes).
+    // Also creates kettle fields: clusters of small depressions in moraine
+    // outwash plains from melted ice blocks.
+    {
+        // Glaciation potential field: latitude + elevation driven
+        // Real glaciation occurs above ~60° latitude and/or above snowline (~3000m+)
+        std::vector<float> glac_potential(total, 0.0f);
+        for (uint32_t y = 0; y < h; ++y) {
+            for (uint32_t x = 0; x < w; ++x) {
+                size_t idx = static_cast<size_t>(y) * w + x;
+                if (eroded[idx] < env.water_level + 0.05f) continue;
+
+                float lat = std::abs(static_cast<float>(y) / static_cast<float>(h - 1) *
+                                     2.0f - 1.0f);
+                float elev_above = eroded[idx] - env.water_level;
+
+                // Latitude factor: ramps from 0 at lat=0.45 to 1 at lat=0.75
+                float lat_factor = std::clamp((lat - 0.45f) / 0.30f, 0.0f, 1.0f);
+                // Elevation factor: ramps from 0 at 0.15 above water to 1 at 0.40
+                float elev_factor = std::clamp((elev_above - 0.15f) / 0.25f, 0.0f, 1.0f);
+                // Combined: either high latitude OR high elevation, or both
+                glac_potential[idx] = std::clamp(
+                    lat_factor * 0.7f + elev_factor * 0.5f, 0.0f, 1.0f);
+            }
+        }
+
+        // 2a. Overdeepened trough basins (large glacial lakes)
+        // Aligned with local slope direction — glaciers follow valleys.
+        // Elliptical stamps with sill at the down-valley end.
+        {
+            FastNoiseLite trough_noise;
+            trough_noise.SetSeed(static_cast<int>(seed + 600));
+            trough_noise.SetNoiseType(FastNoiseLite::NoiseType_OpenSimplex2);
+            trough_noise.SetFrequency(0.12f);  // edge irregularity
+
+            // Candidate placement: scan grid, weight by glaciation potential
+            int spacing = 16;
+            for (int gy = 0; gy < static_cast<int>(h) / spacing; ++gy) {
+                for (int gx = 0; gx < static_cast<int>(w) / spacing; ++gx) {
+                    // Jittered center
+                    int cx = gx * spacing +
+                            static_cast<int>(place_hash(gx, gy, 601) * static_cast<float>(spacing));
+                    int cy = gy * spacing +
+                            static_cast<int>(place_hash(gx, gy, 602) * static_cast<float>(spacing));
+                    cx = std::clamp(cx, 3, static_cast<int>(w) - 4);
+                    cy = std::clamp(cy, 3, static_cast<int>(h) - 4);
+                    size_t ci = static_cast<size_t>(cy) * w + static_cast<size_t>(cx);
+
+                    float gp = glac_potential[ci];
+                    if (gp < 0.25f) continue;
+
+                    // Probability: ~40% at full glaciation potential
+                    if (place_hash(gx, gy, 603) > gp * 0.4f) continue;
+
+                    // Get slope direction for alignment
+                    float dx_slope = 0, dy_slope = 0;
+                    if (cx > 0 && cx < static_cast<int>(w) - 1 &&
+                        cy > 0 && cy < static_cast<int>(h) - 1) {
+                        dx_slope = eroded[ci + 1] - eroded[ci - 1];
+                        dy_slope = eroded[ci + w] - eroded[ci - w];
+                    }
+                    float slope_mag = std::sqrt(dx_slope * dx_slope + dy_slope * dy_slope);
+                    float angle = (slope_mag > 0.001f)
+                                      ? std::atan2(dy_slope, dx_slope)
+                                      : place_hash(gx, gy, 604) * 6.2832f;
+
+                    // Trough dimensions: elongated (finger lake shape)
+                    float a = 8.0f + place_hash(gx, gy, 605) * 12.0f;  // 8-20 tiles major
+                    float b = 2.0f + place_hash(gx, gy, 606) * 4.0f;   // 2-6 tiles minor
+                    float depth = 0.02f + place_hash(gx, gy, 607) * 0.05f;  // 0.02-0.07 elev01
+
+                    float cos_a = std::cos(angle), sin_a = std::sin(angle);
+                    int ir = static_cast<int>(std::ceil(a)) + 2;
+
+                    // Apply elliptical basin stamp
+                    for (int dy = -ir; dy <= ir; ++dy) {
+                        for (int dx = -ir; dx <= ir; ++dx) {
+                            int tx = cx + dx, ty = cy + dy;
+                            if (tx < 0 || tx >= static_cast<int>(w) ||
+                                ty < 0 || ty >= static_cast<int>(h))
+                                continue;
+                            size_t ti = static_cast<size_t>(ty) * w + static_cast<size_t>(tx);
+                            if (eroded[ti] < env.water_level) continue;
+
+                            // Rotated elliptical coordinates
+                            float fdx = static_cast<float>(dx);
+                            float fdy = static_cast<float>(dy);
+                            float ru = cos_a * fdx + sin_a * fdy;
+                            float rv = -sin_a * fdx + cos_a * fdy;
+                            float q = (ru * ru) / (a * a) + (rv * rv) / (b * b);
+
+                            // Edge noise for irregular boundary
+                            float edge_warp = trough_noise.GetNoise(
+                                static_cast<float>(tx), static_cast<float>(ty));
+                            q += edge_warp * 0.08f;
+
+                            if (q < 1.0f) {
+                                float t = 1.0f - q;
+                                float bowl = t * t * (3.0f - 2.0f * t);  // smoothstep
+                                eroded[ti] = std::max(eroded[ti] - depth * bowl * gp,
+                                                      env.water_level - 0.01f);
+                            }
+                            // Down-valley sill (rock lip) at outlet end
+                            else if (q >= 1.0f && q < 1.15f && ru > a * 0.5f) {
+                                float s = 1.0f - (q - 1.0f) / 0.15f;
+                                eroded[ti] = std::min(eroded[ti] + depth * 0.25f * s * s * gp,
+                                                      1.0f);
+                            }
                         }
                     }
                 }
-                if (near_water)
-                    continue;
+            }
+        }
 
-                // Elongated rift-like depressions: different x/y scales for anisotropy
-                float gn = graben_noise.GetNoise(fx * 0.8f, fy * 1.2f);
-                float gs = graben_shape.GetNoise(fx * 1.3f, fy * 0.7f);
-                float ge = graben_edge.GetNoise(fx, fy);
+        // 2b. Kettle fields: clusters of small depressions in formerly glaciated
+        // low-relief areas (moraine outwash plains). Melted ice blocks left
+        // pockmarked terrain with many small lakes (Minnesota, Manitoba).
+        {
+            int spacing = 20;
+            for (int gy = 0; gy < static_cast<int>(h) / spacing; ++gy) {
+                for (int gx = 0; gx < static_cast<int>(w) / spacing; ++gx) {
+                    int cx = gx * spacing +
+                            static_cast<int>(place_hash(gx, gy, 650) * static_cast<float>(spacing));
+                    int cy = gy * spacing +
+                            static_cast<int>(place_hash(gx, gy, 651) * static_cast<float>(spacing));
+                    cx = std::clamp(cx, 2, static_cast<int>(w) - 3);
+                    cy = std::clamp(cy, 2, static_cast<int>(h) - 3);
+                    size_t ci = static_cast<size_t>(cy) * w + static_cast<size_t>(cx);
 
-                // Depression forms where noise fields align + irregular edges
-                if (gn > 0.15f && gs > 0.05f) {
-                    float raw = (gn - 0.15f) * (gs - 0.05f) * 15.0f;
-                    // Edge noise creates irregular boundaries
-                    float edge_mod = 0.6f + 0.4f * ge;
-                    float strength = raw * edge_mod;
-                    strength = std::clamp(strength, 0.0f, 0.12f);
-                    eroded[idx] -= strength;
+                    float gp = glac_potential[ci];
+                    if (gp < 0.20f) continue;
+
+                    // Compute local relief: kettles only form on flat outwash
+                    float local_relief = 0.0f;
+                    int rcount = 0;
+                    for (int dy = -3; dy <= 3; ++dy) {
+                        for (int dx = -3; dx <= 3; ++dx) {
+                            int tx = cx + dx, ty = cy + dy;
+                            if (tx < 0 || tx >= static_cast<int>(w) ||
+                                ty < 0 || ty >= static_cast<int>(h))
+                                continue;
+                            size_t ti = static_cast<size_t>(ty) * w + static_cast<size_t>(tx);
+                            local_relief += std::abs(eroded[ti] - eroded[ci]);
+                            rcount++;
+                        }
+                    }
+                    local_relief /= static_cast<float>(std::max(rcount, 1));
+                    if (local_relief > 0.03f) continue;  // too rugged
+
+                    // Place 3-8 small kettles around this cluster center
+                    int n_kettles = 3 + static_cast<int>(place_hash(gx, gy, 652) * 6.0f);
+                    for (int k = 0; k < n_kettles; ++k) {
+                        int kx = cx + static_cast<int>((place_hash(gx * 100 + k, gy, 653) - 0.5f) *
+                                                       16.0f);
+                        int ky = cy + static_cast<int>((place_hash(gx, gy * 100 + k, 654) - 0.5f) *
+                                                       16.0f);
+                        if (kx < 1 || kx >= static_cast<int>(w) - 1 ||
+                            ky < 1 || ky >= static_cast<int>(h) - 1)
+                            continue;
+                        size_t ki = static_cast<size_t>(ky) * w + static_cast<size_t>(kx);
+                        if (eroded[ki] < env.water_level + 0.03f) continue;
+
+                        float kr = 1.5f + place_hash(gx * 100 + k, gy, 655) * 2.5f;  // 1.5-4 tiles
+                        float kd = 0.005f + place_hash(gx, gy * 100 + k, 656) * 0.015f;  // shallow
+                        float kgp = glac_potential[ki];  // use actual position, not cluster center
+                        int kir = static_cast<int>(std::ceil(kr)) + 1;
+
+                        for (int dy = -kir; dy <= kir; ++dy) {
+                            for (int dx = -kir; dx <= kir; ++dx) {
+                                int tx = kx + dx, ty = ky + dy;
+                                if (tx < 0 || tx >= static_cast<int>(w) ||
+                                    ty < 0 || ty >= static_cast<int>(h))
+                                    continue;
+                                float dist2 = static_cast<float>(dx * dx + dy * dy);
+                                float q = dist2 / (kr * kr);
+                                if (q < 1.0f) {
+                                    float t = 1.0f - q;
+                                    float bowl = t * t;
+                                    size_t ti = static_cast<size_t>(ty) * w +
+                                                static_cast<size_t>(tx);
+                                    eroded[ti] = std::max(eroded[ti] - kd * bowl * kgp,
+                                                          env.water_level - 0.01f);
+                                }
+                            }
+                        }
+                    }
                 }
+            }
+        }
+    }
+
+    // ── Process 3: Volcanic calderas ─────────────────────────────────────
+    // Collapsed volcano craters at convergent margins. Circular depressions
+    // with raised rims (Lake Crater, Toba, Pinatubo).
+    {
+        int spacing = 24;
+        int caldera_count = 0;
+        for (int gy = 0; gy < static_cast<int>(h) / spacing && caldera_count < 6; ++gy) {
+            for (int gx = 0; gx < static_cast<int>(w) / spacing && caldera_count < 6; ++gx) {
+
+                int cx = gx * spacing +
+                        static_cast<int>(place_hash(gx, gy, 700) * static_cast<float>(spacing));
+                int cy = gy * spacing +
+                        static_cast<int>(place_hash(gx, gy, 701) * static_cast<float>(spacing));
+                cx = std::clamp(cx, 6, static_cast<int>(w) - 7);
+                cy = std::clamp(cy, 6, static_cast<int>(h) - 7);
+                size_t ci = static_cast<size_t>(cy) * w + static_cast<size_t>(cx);
+
+                // Must be near convergent boundary (volcanic arc) and on land
+                float conv = convergence_field[ci];
+                float bd = boundary_dist[ci];
+                if (conv < 0.15f) continue;             // needs convergence
+                if (bd > 25.0f || bd < 3.0f) continue;  // within arc zone
+                if (eroded[ci] < env.water_level + 0.10f) continue;
+
+                // Probability: higher convergence = more likely
+                if (place_hash(gx, gy, 702) > conv * 0.35f) continue;
+
+                // Caldera dimensions: 4-9 tiles radius, slightly elliptical
+                float a = 4.0f + place_hash(gx, gy, 703) * 5.0f;
+                float b = a * (0.7f + place_hash(gx, gy, 704) * 0.3f);
+                float depth = 0.03f + place_hash(gx, gy, 705) * 0.05f;
+                float rim_height = depth * (0.3f + place_hash(gx, gy, 706) * 0.4f);
+                float angle = place_hash(gx, gy, 707) * 3.14159265f;
+                float cos_a = std::cos(angle), sin_a = std::sin(angle);
+                int ir = static_cast<int>(std::ceil(std::max(a, b))) + 3;
+
+                for (int dy = -ir; dy <= ir; ++dy) {
+                    for (int dx = -ir; dx <= ir; ++dx) {
+                        int tx = cx + dx, ty = cy + dy;
+                        if (tx < 0 || tx >= static_cast<int>(w) ||
+                            ty < 0 || ty >= static_cast<int>(h))
+                            continue;
+                        size_t ti = static_cast<size_t>(ty) * w + static_cast<size_t>(tx);
+                        if (eroded[ti] < env.water_level) continue;
+
+                        float fdx = static_cast<float>(dx);
+                        float fdy = static_cast<float>(dy);
+                        float ru = cos_a * fdx + sin_a * fdy;
+                        float rv = -sin_a * fdx + cos_a * fdy;
+                        float q = (ru * ru) / (a * a) + (rv * rv) / (b * b);
+
+                        if (q < 1.0f) {
+                            // Interior: bowl depression
+                            float t = 1.0f - q;
+                            float bowl = t * t * (3.0f - 2.0f * t);
+                            eroded[ti] = std::max(eroded[ti] - depth * bowl,
+                                                  env.water_level - 0.01f);
+                        } else if (q < 1.3f) {
+                            // Rim: raised annulus
+                            float s = 1.0f - (q - 1.0f) / 0.3f;
+                            float rim = s * s * (3.0f - 2.0f * s);
+                            eroded[ti] = std::min(eroded[ti] + rim_height * rim, 1.0f);
+                        }
+                    }
+                }
+                caldera_count++;
             }
         }
     }

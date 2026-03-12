@@ -103,6 +103,27 @@ Anisotropic ridged noise is sampled in boundary-aligned coordinates (tangent dir
 
 The gentler thermal parameters (rate 0.12 vs 0.20, threshold 0.055 vs 0.05) complement the more powerful stream-power erosion in stage 5, preventing over-smoothing while still removing the sharpest tectonic edges.
 
+### Stage 4b (Tectonic only): Geological Depression Formation
+
+Three physically-justified processes create natural lake basins with distinct morphologies. This stage runs before stream-power erosion so drainage networks develop realistic outlets from these basins. All depressions are clamped at `water_level − 0.01` to allow sub-sea-level features (analogous to the Dead Sea) without creating spurious ocean tiles.
+
+**Process 1 — Tectonic Grabens**: rift basins form at divergent plate boundaries where crust pulls apart.
+- Only applied within the rift corridor: `convergence_field < −0.1` and `boundary_dist ≤ 12` tiles.
+- Subsidence is Gaussian across the corridor (σ=6 tiles) × segmentation noise along the boundary tangent (breaks the continuous rift into discrete en echelon basins) × irregular edge noise.
+- Maximum subsidence 0.08 elev01 (~580 m). Analogues: East African Rift lakes (Tanganyika, Malawi, Turkana).
+
+**Process 2 — Glacial Scouring**: a per-tile glaciation potential field (latitude ramp 0.45→0.75, elevation ramp water+0.15→water+0.40; combined `lat_factor × 0.7 + elev_factor × 0.5`) gates two sub-processes:
+
+- **2a — Overdeepened trough basins**: jittered-grid candidates weighted by glaciation potential. Each accepted candidate stamps a slope-aligned elliptical basin (8–20 tile major axis / 2–6 tile minor axis) with smoothstep bowl depth 0.02–0.07 elev01. A rock-lip sill is raised at the down-valley outlet end (25% of bowl depth). Produces finger-lake geometry (Great Lakes, Scandinavian and Patagonian lakes).
+- **2b — Kettle fields**: cluster centers on flat outwash terrain (local 7×7 relief < 0.03) each spawn 3–8 circular depressions (radius 1.5–4 tiles, depth 0.005–0.020), weighted by local glaciation potential. Mimics Minnesota/Manitoba pockmarked lake districts left by melting ice blocks.
+
+**Process 3 — Volcanic Calderas**: collapsed volcano craters near convergent arcs.
+- Placement criteria: `convergence_field > 0.15` (volcanic arc zone), `boundary_dist` 3–25 tiles, elevation ≥ `water_level + 0.10`.
+- Up to 6 calderas per world (deterministic hash placement, probability ∝ convergence strength).
+- Slightly elliptical (4–9 tile radius), smoothstep bowl depth 0.03–0.08, with a raised rim annulus (30–70% of bowl depth) extending to 1.3× the crater radius. Analogues: Crater Lake (Oregon), Toba (Sumatra), Pinatubo (Philippines).
+
+**Interaction with downstream stages**: these basins survive thermal erosion (stage 4) and stream-power erosion (stage 5) with their depressions intact, since erosion only removes material from high points. The weather simulation's basin spillway storage system then fills them when precipitation accumulates, producing 10–60 persistent lakes per preset depending on terrain geometry.
+
 ### Stage 5 (Tectonic only): Stream-Power Erosion with Sediment Capacity
 
 40 iterations of stream-power law erosion replace the previous simple hydraulic erosion for more realistic valley-carving behavior:
