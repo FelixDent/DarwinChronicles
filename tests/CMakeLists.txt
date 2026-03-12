@@ -35,7 +35,26 @@ target_link_libraries(autotile_tests PRIVATE
     Threads::Threads
 )
 
+# ── Depression & lake tests (terrain gen + hydrology, no SDL) ────────────
+add_executable(depression_tests
+    test_depressions.cpp
+    ${CMAKE_SOURCE_DIR}/sandboxes/weather/terrain_gen.cpp
+    ${CMAKE_SOURCE_DIR}/sandboxes/weather/weather.cpp
+    ${CMAKE_SOURCE_DIR}/sandboxes/weather/dynamics.cpp
+    ${CMAKE_SOURCE_DIR}/sandboxes/weather/atmosphere.cpp
+)
+target_include_directories(depression_tests PRIVATE
+    ${CMAKE_SOURCE_DIR}/sandboxes/weather
+)
+target_link_libraries(depression_tests PRIVATE
+    Catch2::Catch2WithMain
+    FastNoiseLite
+    darwin_warnings
+    Threads::Threads
+)
+
 include(CTest)
 include(Catch)
 catch_discover_tests(darwin_tests)
 catch_discover_tests(autotile_tests)
+catch_discover_tests(depression_tests)

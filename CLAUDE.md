@@ -69,8 +69,9 @@ Google C++ style: 4-space indent, 100-char lines, `#pragma once`, namespace `dar
 ### After Major Changes (in order):
 1. **Critical change reviewer** → fix all findings immediately
 2. **Perf/UX reviewer** (if runtime code touched) → fix findings
-3. **Docs maintainer** → update CLAUDE.md, CHANGELOG, README, ARCHITECTURE
-4. **Commit and push** — don't accumulate uncommitted work
+3. **Regression test writer** — when changes introduce invariants or conditions that must hold going forward (e.g., new physical constraints, conservation laws, behavioral guarantees, output quality thresholds), use the `regression-test-writer` subagent to codify them as automated Catch2 tests
+4. **Docs maintainer** → update CLAUDE.md, CHANGELOG, README, ARCHITECTURE
+5. **Commit and push** — don't accumulate uncommitted work
 
 ### Simulation Changes:
 - **Must verify by running** — never declare done based on "it compiles"
