@@ -13,23 +13,30 @@ namespace sandbox {
 
 static constexpr float FREEZING_C = 0.0f;
 static constexpr float SNOW_MELT_RATE = 0.08f;     // snow melted per day per degree above 0
-static constexpr float RAIN_TO_SURFACE = 0.45f;    // fraction of precip that becomes surface water
 static constexpr float EVAP_SURFACE_RATE = 0.01f;  // evaporation from surface water per day
 static constexpr float EVAP_SOIL_RATE = 0.007f;    // evaporation from soil moisture per day
 static constexpr float HUMIDITY_FEEDBACK = 0.02f;  // wet terrain contribution to local humidity
 static constexpr float ARIDITY_EMA_RATE = 0.02f;   // EMA smoothing for aridity (~50-day window)
 static constexpr float K_BASEFLOW = 0.01f;         // groundwater baseflow rate (slow, persistent)
 
+// Sub-grid channel drainage: at 50km/tile, each tile contains stream networks
+// that route surface water to the tile outlet much faster than tile-to-tile WSE flow.
+// Modeled as a slope-dependent linear reservoir (standard in large-scale hydrology models
+// like VIC, CLM). drain_rate = K_CHANNEL * sqrt(slope) per day.
+// At slope=0.01: drain_rate = 50 * 0.1 = 5/day → 99% drained in one day.
+// At slope=0.002: drain_rate = 50 * 0.045 = 2.2/day → 89% drained in one day.
+// D8 sinks (depression centers) bypass this → water accumulates → lakes.
+static constexpr float K_CHANNEL = 50.0f;
+
 // D8 neighbor offsets
 static constexpr int DX8[] = {-1, 0, 1, -1, 1, -1, 0, 1};
 static constexpr int DY8[] = {-1, -1, -1, 0, 0, 1, 1, 1};
 
 // ── Surface water cap ───────────────────────────────────────────────────
-// 1.0 on flat → 0.3 at slope 0.1 → ~0.2 at slope 0.2+ (steep terrain sheds water)
-// At 50km/tile, even 1.0 represents a deep lake; most land holds far less.
+// 3.0 on flat → 1.5 at slope 0.1 → ~1.0 at slope 0.2+ (steep terrain sheds water)
 static inline float surface_water_cap(float slope01) {
-    float cap = 0.3f + std::max(0.0f, 0.7f - slope01 / 0.10f * 0.7f);
-    if (slope01 > 0.12f) cap *= std::max(0.5f, 1.0f - (slope01 - 0.12f) * 3.0f);
+    float cap = 1.5f + std::max(0.0f, 1.5f - slope01 / 0.10f * 1.5f);
+    if (slope01 > 0.12f) cap *= std::max(0.65f, 1.0f - (slope01 - 0.12f) * 3.0f);
     return cap;
 }
 
@@ -381,10 +388,22 @@ void tick_dynamics(DynamicState& state, const Terrain& world, const ClimateData&
             // Precipitation falls as snow
             dt.snow_depth += precip_amount;
         } else {
-            // Rain: split between surface water and direct soil infiltration
-            // Steeper slopes → more direct runoff (Horton overland flow)
+            // Variable Source Area (VSA) rainfall-runoff partitioning.
+            // At 50km/tile, most rainfall infiltrates soil. Direct surface runoff from:
+            // 1. Saturated areas (Dunne mechanism): soil near/above field_capacity
+            // 2. Steep slopes (Hortonian mechanism): fast runoff before infiltration
+            // 3. Impervious fraction: bare rock, urbanization, frozen ground (~5%)
+            float sat_ratio = std::clamp(
+                tt.field_capacity > 0.0f ? dt.soil_moisture / tt.field_capacity : 1.0f,
+                0.0f, 1.5f);
+            float sat_excess = std::clamp((sat_ratio - 0.7f) / 0.3f, 0.0f, 1.0f);
             float slope_runoff = std::min(tt.slope01 * 0.5f, 0.15f);
-            float surface_frac = RAIN_TO_SURFACE + slope_runoff;
+            float surface_frac = std::clamp(
+                0.05f                     // base impervious fraction
+                    + 0.50f * sat_excess  // saturation-excess (Dunne): dominant in wet conditions
+                    + slope_runoff,       // slope-dependent Hortonian flow
+                0.05f, 0.70f);
+
             float to_surface = precip_amount * surface_frac;
             float to_soil = precip_amount * (1.0f - surface_frac);
             // Soil can only absorb up to field_capacity directly from rain.
@@ -406,11 +425,10 @@ void tick_dynamics(DynamicState& state, const Terrain& world, const ClimateData&
         // ── 3. Infiltration: surface → soil ──────────────────────────────
         // ksat (m/s) → normalize to fraction/day by dividing by soil_depth
         // so the rate is "fraction of standing water absorbed per day"
-        // 0.80x scaling: allow most infiltration at natural ksat rate.
-        // Real soils absorb precipitation quickly — surface water persists only
-        // in depressions (managed by basin spillway) or when soil is saturated.
+        // 0.25x scaling: raw ksat gives ~0.86/day on flat loam which drains puddles in <2 days.
+        // Reduced to allow surface water persistence for wetlands/rivers.
         float infil_rate =
-            (tt.soil_depth > 0.01f) ? tt.ksat * 86400.0f / tt.soil_depth * 0.80f : 0.0f;
+            (tt.soil_depth > 0.01f) ? tt.ksat * 86400.0f / tt.soil_depth * 0.25f : 0.0f;
         float slope_factor = std::max(
             0.35f, 1.0f - std::pow(tt.slope01, 0.7f));  // superlinear: steep slopes infiltrate less
         float infiltration = infil_rate * slope_factor * dt_days;
@@ -485,7 +503,35 @@ void tick_dynamics(DynamicState& state, const Terrain& world, const ClimateData&
         dt.soil_moisture -= soil_evap;
         state.budget.total_evap_soil += soil_evap;
 
-        // ── 5. Runoff: WSE-based multi-neighbor flow ─────────────────────
+        // ── 5. Sub-grid channel drainage ────────────────────────────────
+        // At 50km/tile resolution, each tile contains stream networks that route
+        // surface water to the tile outlet (D8 downstream neighbor) much faster
+        // than tile-to-tile WSE diffusion. This is the dominant drainage process
+        // for non-lake tiles — only D8 sinks (depression centers) retain water.
+        // Modeled as a slope-dependent linear reservoir: Q = K * sqrt(S) * h
+        // Uses exponential decay for numerical stability.
+        if (dt.surface_water > 0.0f) {
+            int32_t ds = state.downhill[i];
+            bool is_sink = (ds < 0 || static_cast<size_t>(ds) == i);
+            if (!is_sink) {
+                float S = std::max(tt.slope01, 0.002f);  // floor avoids zero on flats
+                float drain_rate = K_CHANNEL * std::sqrt(S);  // 1/day
+                float channel_drain =
+                    dt.surface_water * (1.0f - std::exp(-drain_rate * dt_days));
+                if (!world.tiles[static_cast<size_t>(ds)].is_ocean) {
+                    runoff_in[static_cast<size_t>(ds)] += channel_drain;
+                } else {
+                    state.budget.total_ocean_drain += channel_drain;
+                    state.budget.total_coastal_drain += channel_drain;
+                }
+                dt.surface_water -= channel_drain;
+                // Note: do NOT add to accum[i]/aq[i] here — the water arrives at
+                // the downstream tile via runoff_in, where it will be properly
+                // counted in that tile's discharge when it routes onward.
+            }
+        }
+
+        // ── 6. Runoff: WSE-based multi-neighbor flow ─────────────────────
         // Groundwater baseflow: slow persistent discharge based on slope + permeability
         if (dt.groundwater > 0.0f) {
             float baseflow = K_BASEFLOW * dt.groundwater * (0.2f + tt.slope01 * 0.8f) *
@@ -523,8 +569,8 @@ void tick_dynamics(DynamicState& state, const Terrain& world, const ClimateData&
             }
             float wse_n = world.tiles[ni].elev01 + state.tiles[ni].surface_water;
             float dh = wse_i - wse_n;
-            // Minimum WSE gradient to route flow — lower threshold allows better drainage
-            if (dh > 0.001f) {
+            // Minimum WSE gradient to route flow — small differences create micro-pooling
+            if (dh > 0.005f) {
                 targets[ntargets++] = {ni, dh};
                 sum_dh += dh;
             }
@@ -557,7 +603,7 @@ void tick_dynamics(DynamicState& state, const Terrain& world, const ClimateData&
             aq[i] += out;  // surface runoff → fast discharge component
         }
 
-        // ── 6. Terrain feedback: evaporation → local humidity ────────────
+        // ── 7. Terrain feedback: evaporation → local humidity ────────────
         float total_evap = surface_evap + soil_evap;
         dt.local_humidity =
             std::clamp(dt.local_humidity * 0.95f + total_evap * HUMIDITY_FEEDBACK, 0.0f, 1.0f);
@@ -593,7 +639,7 @@ void tick_dynamics(DynamicState& state, const Terrain& world, const ClimateData&
         dt.soil_moisture = std::clamp(dt.soil_moisture, 0.0f, 1.0f);
         dt.snow_depth = std::max(dt.snow_depth, 0.0f);
 
-        // ── 7. Derived overlay values ────────────────────────────────────
+        // ── 8. Derived overlay values ────────────────────────────────────
         // Effective moisture: combines soil + surface + local humidity
         dt.effective_moisture = std::clamp(
             dt.soil_moisture * 0.6f + dt.surface_water * 0.25f + dt.local_humidity * 0.15f, 0.0f,
@@ -602,7 +648,7 @@ void tick_dynamics(DynamicState& state, const Terrain& world, const ClimateData&
         // Effective evaporation: normalize total evap to [0..1] range
         dt.effective_evap = std::clamp(total_evap / (dt_days * 0.15f + 0.001f), 0.0f, 1.0f);
 
-        // ── 8. Potential evapotranspiration and aridity index ──────────
+        // ── 9. Potential evapotranspiration and aridity index ──────────
         // PET = evaporation demand assuming unlimited water supply
         // Uses temperature + wind + solar (via latitude) — no humidity suppression
         float pet_rate = (EVAP_SURFACE_RATE + EVAP_SOIL_RATE) * temp_factor * wind_factor;
@@ -673,14 +719,13 @@ void tick_dynamics(DynamicState& state, const Terrain& world, const ClimateData&
         }
 
         // Compute basin WSE and spill excess
-        // Only manage basins with meaningful depression depth (>=0.005)
-        // Shallower basins use normal WSE routing — prevents thousands of
-        // micro-basins from trapping water as fake "lakes"
+        // Only manage basins with meaningful depression depth (>=0.001)
+        // Shallower basins use normal WSE routing
         for (uint16_t bi = 0; bi < state.num_basins; ++bi) {
             if (state.basin_area[bi] == 0)
                 continue;
             float depression_depth = state.basin_spill_elev[bi] - state.basin_sink_elev[bi];
-            if (depression_depth < 0.005f)
+            if (depression_depth < 0.001f)
                 continue;  // too shallow for spillway management
 
             float area_f = static_cast<float>(state.basin_area[bi]);
@@ -692,8 +737,8 @@ void tick_dynamics(DynamicState& state, const Terrain& world, const ClimateData&
                 // Spill excess water: drain proportionally from basin tiles
                 float excess_depth = basin_wse - spill;
                 float excess_volume = excess_depth * area_f;
-                // Rate-limit: spill at most 80% of excess per tick for stability
-                excess_volume *= 0.8f;
+                // Rate-limit: spill at most 50% of excess per tick for stability
+                excess_volume *= 0.5f;
                 // Safety: don't drain more than we have
                 excess_volume = std::min(excess_volume, state.basin_volume[bi] * 0.9f);
                 float drain_frac = excess_volume / (state.basin_volume[bi] + 0.0001f);

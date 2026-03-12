@@ -157,13 +157,21 @@ The simulation enforces ten physical invariants to maintain stability and realis
 
 Source: `sandboxes/weather/dynamics.h`, `sandboxes/weather/dynamics.cpp`
 
-Each terrain tile maintains a `DynamicTile` with surface water, soil moisture, snow depth, local humidity, derived overlay values, and aridity tracking fields. The tick processes all land tiles in eight steps. After a headless run completes, `print_hydrology_diagnostics()` prints a comprehensive water-budget report (see Diagnostics section).
+Each terrain tile maintains a `DynamicTile` with surface water, soil moisture, snow depth, local humidity, derived overlay values, and aridity tracking fields. The tick processes all land tiles in nine steps. After a headless run completes, `print_hydrology_diagnostics()` prints a comprehensive water-budget report (see Diagnostics section).
 
 ### 1. Precipitation
 
 When the atmosphere simulation is active, precipitation rate is read directly from the atmosphere grid. Otherwise, a fallback path modulates the static baked precipitation with smooth hash-based noise that drifts with the wind, creating moving weather fronts with a spatial scale of 24 tiles.
 
-If the local temperature is below freezing, precipitation accumulates as snow. Otherwise, 75% becomes surface water and 25% infiltrates directly into soil. Total precipitation is tracked in the `WaterBudget` for run-end diagnostics.
+If the local temperature is below freezing, precipitation accumulates as snow. Otherwise, rain is split between surface water and direct soil infiltration using **Variable Source Area (VSA) partitioning** — see step 1 detail below. Total precipitation is tracked in the `WaterBudget` for run-end diagnostics.
+
+**VSA rainfall-runoff partitioning:** At 50 km/tile, most rainfall infiltrates soil. The surface runoff fraction is computed dynamically from three physical mechanisms, clamped to [5%, 70%]:
+
+1. **Base impervious fraction (5%)**: bare rock, frozen ground, and sub-grid urban cover always generate some runoff regardless of soil state.
+2. **Saturation-excess Dunne runoff (0–50%)**: when soil moisture approaches `field_capacity`, the storage deficit closes and water cannot infiltrate fast enough. The runoff fraction ramps from 0 at 70% saturation to 50% at full saturation. This is the dominant mechanism over gentle terrain.
+3. **Hortonian overland flow (0–15%)**: steep slopes create shorter contact time between rainfall and soil, adding up to 15% additional surface runoff regardless of soil state.
+
+Excess precipitation beyond the soil's `field_capacity` always routes as surface runoff (saturation-excess). Dry unsaturated soil infiltrates nearly all rainfall; saturated soil may route up to 70% directly to surface water.
 
 ### 2. Snowmelt
 
@@ -171,17 +179,30 @@ When temperature rises above freezing, snow melts at a rate proportional to temp
 
 ### 3. Infiltration
 
-Surface water seeps into soil moisture at a rate governed by the tile's geological `ksat` (saturated hydraulic conductivity) normalized by `soil_depth` and `field_capacity` from `TerrainTile`. The `ksat / soil_depth` normalization gives the effective per-tick infiltration fraction, ensuring deep soils accept the same absolute volume as shallow soils at the same conductivity. Sandy soils with high `ksat` drain quickly; clay-rich soils drain slowly. Slope reduces infiltration via a superlinear penalty: `pow(slope01, 0.7)` (was a linear 70% cap), allowing moderate slopes to retain more infiltration than a hard linear cutoff while still strongly penalizing steep terrain. Soil moisture cannot exceed `field_capacity`. Excess water that percolates past the root zone drains into the `groundwater` reservoir (tracked as `total_gw_recharge` in `WaterBudget`).
+Surface water seeps into soil moisture at a rate governed by the tile's geological `ksat` (saturated hydraulic conductivity) normalized by `soil_depth` and `field_capacity` from `TerrainTile`. The `ksat / soil_depth` normalization gives the effective per-tick infiltration fraction, ensuring deep soils accept the same absolute volume as shallow soils at the same conductivity. Sandy soils with high `ksat` drain quickly; clay-rich soils drain slowly. The raw ksat rate is scaled by **0.25×** to allow surface water persistence for wetlands and river channels — at the natural ksat rate, standing water on flat loam drains within two days, preventing any transient pooling outside of basin depressions. Slope reduces infiltration via a superlinear penalty: `pow(slope01, 0.7)` (was a linear 70% cap), allowing moderate slopes to retain more infiltration than a hard linear cutoff while still strongly penalizing steep terrain. Soil moisture cannot exceed `field_capacity`. Excess water that percolates past the root zone drains into the `groundwater` reservoir (tracked as `total_gw_recharge` in `WaterBudget`).
 
 ### 4. Evaporation
 
 Evaporation draws from surface water first (at EVAP_SURFACE_RATE=0.01, reduced from 0.02), then soil moisture (at EVAP_SOIL_RATE=0.007, reduced from 0.015). The rate scales with temperature, wind speed, and inverse local humidity. A `depth_boost` factor (0.5) modestly amplifies evaporation from deeper standing water. Soil evaporation is blocked below the `wilting_point` to prevent soil from drying beyond plant-accessible limits. **Actual evapotranspiration (AET) is capped to PET** — total evaporation from both surface and soil cannot exceed the atmosphere's evaporative demand in a given tick, preventing physically impossible hyperdrying in fast time steps. On land with active atmosphere, evaporation is physically limited by available moisture. Evaporation volumes are split into surface and soil components in the `WaterBudget`.
 
-### 5. Runoff
+### 5. Sub-Grid Channel Drainage
 
-Surface water routes to all downhill neighbors via WSE (water-surface-elevation) based multi-neighbor flow. Outflow is distributed across every neighbor with lower water surface elevation, weighted by the elevation gradient. A minimum WSE gradient of 0.005 is enforced to allow micro-pooling rather than forcing every wet tile to drain. Ocean tiles are treated as a separate drain path (volume tracked as `total_coastal_drain` in `WaterBudget`, which rolls into `total_ocean_drain`) and are excluded from the WSE neighbor search. A CFL cap limits the outflow fraction (`effective_k = min(K_OUT * dt_days, 0.5)`) to ensure numerical stability. **Flash runoff from surface-water cap overflow is routed to the D8 downstream neighbor** (not discarded to ocean); it is only counted as `total_overflow` in `WaterBudget` and falls back to ocean drain if no downstream neighbor exists. Runoff accumulates in a pre-allocated buffer (`DynamicState::runoff_buf`) and is applied after all tiles are processed to avoid order-dependent artifacts.
+At 50 km/tile resolution, each tile contains unresolved stream networks — first-order to third-order channels that route water to the tile outlet far faster than tile-to-tile WSE diffusion. These are modeled as a **slope-dependent linear reservoir** (the same formulation used by large-scale land models VIC and CLM):
 
-**Slope-dependent surface runoff (Horton flow):** Steep slopes receive 0–15% higher surface runoff fraction (relative to infiltration) to simulate reduced contact time between falling water and soil on steep terrain.
+```
+drain_rate = K_CHANNEL * sqrt(slope)   [1/day, K_CHANNEL = 50]
+channel_drain = surface_water * (1 - exp(-drain_rate * dt_days))
+```
+
+At slope = 0.01, drain_rate = 5/day — 99% of surface water exits within one day. At slope = 0.002 (near-flat), drain_rate = 2.2/day — 89% exits per day. The exponential form gives numerical stability for large time steps.
+
+**D8 sinks bypass this step.** Tiles whose D8 downstream pointer points to themselves (depression centers) do not drain via the channel model — water accumulates and is managed by the basin spillway system (step 5b-ii). This separation is what enables lake formation at topographic depressions while keeping non-lake terrain well-drained.
+
+Channel drain routes to the D8 downstream neighbor. If the downstream neighbor is ocean, volume is counted as `total_coastal_drain` in `WaterBudget`.
+
+### 6. WSE Runoff
+
+Surface water that remains after sub-grid channel drainage routes to neighboring tiles via WSE (water-surface-elevation) based multi-neighbor flow. Outflow is distributed across every neighbor with lower water surface elevation, weighted by the elevation gradient. A minimum WSE gradient of 0.005 is enforced to allow micro-pooling rather than forcing every wet tile to drain. Ocean tiles are treated as a separate drain path (volume tracked as `total_coastal_drain` in `WaterBudget`, which rolls into `total_ocean_drain`) and are excluded from the WSE neighbor search. A CFL cap limits the outflow fraction (`effective_k = min(K_OUT * dt_days, 0.5)`) to ensure numerical stability. **Flash runoff from surface-water cap overflow is routed to the D8 downstream neighbor** (not discarded to ocean); it is only counted as `total_overflow` in `WaterBudget` and falls back to ocean drain if no downstream neighbor exists. Runoff accumulates in a pre-allocated buffer (`DynamicState::runoff_buf`) and is applied after all tiles are processed to avoid order-dependent artifacts.
 
 **Headwater minimum discharge:** Tiles with elevation above 0.55 receive a fixed minimum discharge contribution plus a fraction of local precipitation, preventing headwater streams from going silent between precipitation events.
 
@@ -204,9 +225,9 @@ During each tick, for basins where `basin_spill_elev − basin_sink_elev >= 0.00
 
 This mechanism enables persistent lakes to form in topographic depressions without requiring terrain-generation to pre-classify lake tiles.
 
-### 5c. D8 Flow Accumulation (Two-Reservoir)
+### 6c. D8 Flow Accumulation (Two-Reservoir)
 
-After WSE runoff is applied, a **D8 steepest-descent flow accumulation** pass updates per-tile discharge. Tiles are visited in topographic order (`DynamicState::topo_order`, computed once at init by elevation-sorting), and each tile propagates flow to its single steepest downhill neighbor (`DynamicState::downhill`, the D8 sink). A `SINK_TOLERANCE=0.001` allows micro-depressions to retain a small puddle rather than draining completely — these become potential lake sites.
+After WSE runoff (step 6) is applied, a **D8 steepest-descent flow accumulation** pass updates per-tile discharge. Tiles are visited in topographic order (`DynamicState::topo_order`, computed once at init by elevation-sorting), and each tile propagates flow to its single steepest downhill neighbor (`DynamicState::downhill`, the D8 sink). A `SINK_TOLERANCE=0.001` allows micro-depressions to retain a small puddle rather than draining completely — these become potential lake sites.
 
 D8 accumulation is split into two separate reservoirs propagated independently along the same D8 graph:
 
@@ -215,15 +236,15 @@ D8 accumulation is split into two separate reservoirs propagated independently a
 
 `DynamicTile::discharge` is updated as the sum of EMA-smoothed `quickflow` + `baseflow_d` each tick. `DynamicState::accum_discharge` holds the combined accumulation buffer for visualization. The Discharge (F5) overlay and `print_hydrology_diagnostics()` both read from `accum_discharge`.
 
-### 6. Terrain Feedback
+### 7. Terrain Feedback
 
 Total evaporation from each tile feeds back into local humidity, which decays each tick. This creates a dampening effect: wet areas evaporate more, raising local humidity, which then suppresses further evaporation.
 
-### 7. Overflow Handling
+### 8. Overflow Handling
 
-Surface water is capped by a smooth formula: `max_sw = 1.0 + max(0, 1 − slope / 0.1)`. This gives flat tiles (slope=0) a cap of 2.0, steeply sloped tiles (slope ≥ 0.1) a cap of 1.0, and a smooth continuous transition between — replacing the previous step function (2.0 below slope 0.05, 1.0 above). Overflow above the cap transfers into soil moisture (up to soil capacity). All fields are clamped to valid ranges.
+Surface water is capped by `surface_water_cap(slope01)`: 3.0 on flat terrain (slope=0), 1.5 at slope=0.1, with a 0.65× multiplier applied above slope=0.12 for steep terrain. This allows realistic lake depth in depression basins while preventing water accumulation on slopes. Overflow above the cap transfers into soil moisture (up to soil capacity). All fields are clamped to valid ranges.
 
-### 8. Aridity Index Update
+### 9. Aridity Index Update
 
 PET (potential evapotranspiration) is computed from temperature and wind speed with no humidity suppression — it represents the evaporative demand of the atmosphere regardless of water availability. The instantaneous aridity index is the ratio of effective precipitation to PET. An exponential moving average (50-day window, EMA weight 70/30 — previously 80/20) smooths the aridity value to remove day-to-day noise while tracking seasonal shifts faster. Values above 1.0 indicate humid conditions (more rain than evaporative demand); values below 0.2 indicate arid to hyper-arid conditions. The color gradient scale spans 0–1.5 (desert to very humid).
 
