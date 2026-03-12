@@ -13,7 +13,7 @@ namespace sandbox {
 
 static constexpr float FREEZING_C = 0.0f;
 static constexpr float SNOW_MELT_RATE = 0.08f;     // snow melted per day per degree above 0
-static constexpr float RAIN_TO_SURFACE = 0.80f;    // fraction of precip that becomes surface water
+static constexpr float RAIN_TO_SURFACE = 0.45f;    // fraction of precip that becomes surface water
 static constexpr float EVAP_SURFACE_RATE = 0.01f;  // evaporation from surface water per day
 static constexpr float EVAP_SOIL_RATE = 0.007f;    // evaporation from soil moisture per day
 static constexpr float HUMIDITY_FEEDBACK = 0.02f;  // wet terrain contribution to local humidity
@@ -25,10 +25,11 @@ static constexpr int DX8[] = {-1, 0, 1, -1, 1, -1, 0, 1};
 static constexpr int DY8[] = {-1, -1, -1, 0, 0, 1, 1, 1};
 
 // ── Surface water cap ───────────────────────────────────────────────────
-// 3.0 on flat → 1.5 at slope 0.1 → ~1.0 at slope 0.2+ (steep terrain sheds water)
+// 1.0 on flat → 0.3 at slope 0.1 → ~0.2 at slope 0.2+ (steep terrain sheds water)
+// At 50km/tile, even 1.0 represents a deep lake; most land holds far less.
 static inline float surface_water_cap(float slope01) {
-    float cap = 1.5f + std::max(0.0f, 1.5f - slope01 / 0.10f * 1.5f);
-    if (slope01 > 0.12f) cap *= std::max(0.65f, 1.0f - (slope01 - 0.12f) * 3.0f);
+    float cap = 0.3f + std::max(0.0f, 0.7f - slope01 / 0.10f * 0.7f);
+    if (slope01 > 0.12f) cap *= std::max(0.5f, 1.0f - (slope01 - 0.12f) * 3.0f);
     return cap;
 }
 
@@ -384,8 +385,14 @@ void tick_dynamics(DynamicState& state, const Terrain& world, const ClimateData&
             // Steeper slopes → more direct runoff (Horton overland flow)
             float slope_runoff = std::min(tt.slope01 * 0.5f, 0.15f);
             float surface_frac = RAIN_TO_SURFACE + slope_runoff;
-            dt.surface_water += precip_amount * surface_frac;
-            dt.soil_moisture += precip_amount * (1.0f - surface_frac);
+            float to_surface = precip_amount * surface_frac;
+            float to_soil = precip_amount * (1.0f - surface_frac);
+            // Soil can only absorb up to field_capacity directly from rain.
+            // Excess becomes saturation-excess overland flow → surface water.
+            float soil_room = std::max(0.0f, tt.field_capacity - dt.soil_moisture);
+            float actual_soil = std::min(to_soil, soil_room);
+            dt.soil_moisture += actual_soil;
+            dt.surface_water += to_surface + (to_soil - actual_soil);
         }
 
         // ── 2. Snowmelt ─────────────────────────────────────────────────
@@ -399,10 +406,11 @@ void tick_dynamics(DynamicState& state, const Terrain& world, const ClimateData&
         // ── 3. Infiltration: surface → soil ──────────────────────────────
         // ksat (m/s) → normalize to fraction/day by dividing by soil_depth
         // so the rate is "fraction of standing water absorbed per day"
-        // 0.25x scaling: raw ksat gives ~0.86/day on flat loam which drains puddles in <2 days.
-        // Reduced to allow surface water persistence for wetlands/rivers.
+        // 0.80x scaling: allow most infiltration at natural ksat rate.
+        // Real soils absorb precipitation quickly — surface water persists only
+        // in depressions (managed by basin spillway) or when soil is saturated.
         float infil_rate =
-            (tt.soil_depth > 0.01f) ? tt.ksat * 86400.0f / tt.soil_depth * 0.25f : 0.0f;
+            (tt.soil_depth > 0.01f) ? tt.ksat * 86400.0f / tt.soil_depth * 0.80f : 0.0f;
         float slope_factor = std::max(
             0.35f, 1.0f - std::pow(tt.slope01, 0.7f));  // superlinear: steep slopes infiltrate less
         float infiltration = infil_rate * slope_factor * dt_days;
@@ -412,8 +420,22 @@ void tick_dynamics(DynamicState& state, const Terrain& world, const ClimateData&
         dt.surface_water -= actual_infil;
         dt.soil_moisture += actual_infil;
 
-        // Excess infiltration goes to groundwater (scaled by bedrock permeability)
+        // Gravity drainage: soil above field capacity percolates to groundwater.
+        // This is the primary path for soil → groundwater recharge (real hydrology:
+        // field capacity is the maximum water held against gravity; excess drains).
         float gw_cap = tt.soil_depth * tt.porosity;  // max groundwater = saturated zone capacity
+        if (dt.soil_moisture > tt.field_capacity && dt.groundwater < gw_cap) {
+            float excess_soil = dt.soil_moisture - tt.field_capacity;
+            // Drain at ksat rate, proportional to excess above field capacity
+            float perc_rate = tt.ksat * 86400.0f / tt.soil_depth * tt.bedrock_permeability;
+            float percolation = std::min(excess_soil, perc_rate * dt_days);
+            percolation = std::min(percolation, gw_cap - dt.groundwater);
+            dt.soil_moisture -= percolation;
+            dt.groundwater += percolation;
+            state.budget.total_gw_recharge += percolation;
+        }
+
+        // Excess infiltration from surface → groundwater (when soil is saturated)
         if (dt.surface_water > 0.0f && dt.soil_moisture >= tt.field_capacity &&
             dt.groundwater < gw_cap) {
             float gw_infil = std::min(dt.surface_water * 0.05f * tt.bedrock_permeability * dt_days,
@@ -433,8 +455,14 @@ void tick_dynamics(DynamicState& state, const Terrain& world, const ClimateData&
         float evap_multiplier = temp_factor * wind_factor * humidity_suppress;
 
         // Evaporate from surface first, then soil
-        // Deeper standing water evaporates slightly faster (larger exposed area)
-        float depth_boost = 1.0f + std::min(dt.surface_water, 1.0f) * 0.5f;
+        // Thin films evaporate much faster (high surface-area:volume ratio at 50km tile scale).
+        // Below 0.05 depth, evaporation rate scales inversely with depth — a 0.01 film
+        // evaporates 5x faster than a 0.05 layer. This clears non-lake surface water
+        // without affecting deep lake evaporation rates.
+        float thin_film_boost = (dt.surface_water < 0.05f && dt.surface_water > 0.0f)
+                                    ? std::max(1.0f, std::min(0.05f / (dt.surface_water + 0.001f), 8.0f))
+                                    : 1.0f;
+        float depth_boost = thin_film_boost;
         // PET caps total evapotranspiration (actual ET never exceeds potential ET)
         float pet_limit =
             (EVAP_SURFACE_RATE + EVAP_SOIL_RATE) * temp_factor * wind_factor * dt_days;
@@ -495,8 +523,8 @@ void tick_dynamics(DynamicState& state, const Terrain& world, const ClimateData&
             }
             float wse_n = world.tiles[ni].elev01 + state.tiles[ni].surface_water;
             float dh = wse_i - wse_n;
-            // Minimum WSE gradient to route flow — small differences create micro-pooling
-            if (dh > 0.005f) {
+            // Minimum WSE gradient to route flow — lower threshold allows better drainage
+            if (dh > 0.001f) {
                 targets[ntargets++] = {ni, dh};
                 sum_dh += dh;
             }
@@ -539,7 +567,7 @@ void tick_dynamics(DynamicState& state, const Terrain& world, const ClimateData&
         if (dt.surface_water > max_sw) {
             float overflow = dt.surface_water - max_sw;
             // Route half of overflow to groundwater (subsurface absorption)
-            float gw_cap2 = tt.soil_depth * tt.porosity;
+            float gw_cap2 = gw_cap;
             float gw_absorb = std::min(overflow * 0.5f, std::max(0.0f, gw_cap2 - dt.groundwater));
             dt.groundwater += gw_absorb;
             state.budget.total_gw_recharge += gw_absorb;
@@ -645,13 +673,14 @@ void tick_dynamics(DynamicState& state, const Terrain& world, const ClimateData&
         }
 
         // Compute basin WSE and spill excess
-        // Only manage basins with meaningful depression depth (>=0.001)
-        // Shallower basins use normal WSE routing
+        // Only manage basins with meaningful depression depth (>=0.005)
+        // Shallower basins use normal WSE routing — prevents thousands of
+        // micro-basins from trapping water as fake "lakes"
         for (uint16_t bi = 0; bi < state.num_basins; ++bi) {
             if (state.basin_area[bi] == 0)
                 continue;
             float depression_depth = state.basin_spill_elev[bi] - state.basin_sink_elev[bi];
-            if (depression_depth < 0.001f)
+            if (depression_depth < 0.005f)
                 continue;  // too shallow for spillway management
 
             float area_f = static_cast<float>(state.basin_area[bi]);
@@ -663,8 +692,8 @@ void tick_dynamics(DynamicState& state, const Terrain& world, const ClimateData&
                 // Spill excess water: drain proportionally from basin tiles
                 float excess_depth = basin_wse - spill;
                 float excess_volume = excess_depth * area_f;
-                // Rate-limit: spill at most 50% of excess per tick for stability
-                excess_volume *= 0.5f;
+                // Rate-limit: spill at most 80% of excess per tick for stability
+                excess_volume *= 0.8f;
                 // Safety: don't drain more than we have
                 excess_volume = std::min(excess_volume, state.basin_volume[bi] * 0.9f);
                 float drain_frac = excess_volume / (state.basin_volume[bi] + 0.0001f);
